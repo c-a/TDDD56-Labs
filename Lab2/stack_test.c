@@ -52,8 +52,8 @@ typedef int data_t;
 #define DATA_SIZE sizeof(data_t)
 #define DATA_VALUE 5
 
-stack_t *stack;
-data_t data;
+static stack_t *stack;
+static data_t data;
 
 void
 test_init()
@@ -66,6 +66,7 @@ test_setup()
 {
   // Allocate and initialize your test stack before each test
   data = DATA_VALUE;
+  stack = stack_alloc();
 }
 
 void
@@ -73,6 +74,7 @@ test_teardown()
 {
   // Do not forget to free your stacks after each test
   // to avoid memory leaks as now
+  stack_free(stack);
 }
 
 void
@@ -81,21 +83,91 @@ test_finalize()
   // Destroy properly your test batch
 }
 
+static void
+run_test_function(void* (*func)(void* arg))
+{
+  pthread_attr_t attr;
+  pthread_t thread[NB_THREADS];
+
+  int i;
+
+  pthread_attr_init(&attr);
+  pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE); 
+
+  for (i = 0; i < NB_THREADS; i++)
+    {
+      pthread_create(&thread[i], &attr, func, NULL);
+    }
+
+  for (i = 0; i < NB_THREADS; i++)
+    {
+      pthread_join(thread[i], NULL);
+    }
+}
+
+static void*
+thread_test_push(void* arg)
+{
+  int i;
+
+  for (i = 0; i < MAX_PUSH_POP; i++)
+    {
+      stack_push(stack, &data);
+    }
+
+  return NULL; 
+}
+
 int
 test_push_safe()
 {
+  size_t counter;
+  void *buf;
+
   // Make sure your stack remains in a good state with expected content when
   // several threads push concurrently to it
 
-  return 0;
+  run_test_function(&thread_test_push);
+
+  counter = 0;
+  while (stack_pop(stack, &buf) == 0)
+  {
+    if (buf != &data)
+      return 0;
+    counter++;
+  }
+
+  return counter == (size_t)(NB_THREADS * MAX_PUSH_POP);
+}
+
+static void*
+thread_test_pop(void* arg)
+{
+  int i;
+
+  for (i = 0; i < MAX_PUSH_POP; i++)
+    {
+      stack_pop(stack, NULL);
+    }
+
+  return NULL; 
 }
 
 int
 test_pop_safe()
 {
+  int i;
+
   // Same as the test above for parallel pop operation
 
-  return 0;
+  for (i = 0; i < NB_THREADS * MAX_PUSH_POP; i++)
+    {
+      stack_push(stack, &data);
+    }
+
+  run_test_function(&thread_test_pop);
+
+  return stack_pop(stack, NULL) == -1;
 }
 
 // 3 Threads should be enough to raise and detect the ABA problem

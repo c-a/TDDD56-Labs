@@ -124,10 +124,27 @@ compute_chunk(struct mandelbrot_param *args)
 
 #define MIN(x, y) (((x) < (y)) ? (x) : (y))
 
+#if LOADBALANCE == 1
+static int next_row;
+static pthread_mutex_t next_row_mutex = PTHREAD_MUTEX_INITIALIZER;
+#elif LOADBALANCE == 2
+static int next_chunk;
+
+#define LINE_SPLIT_TWO_POWER 2
+#define LINE_SPLIT (1 << LINE_SPLIT_TWO_POWER)
+#define CHUNK_MASK (LINE_SPLIT - 1)
+#endif
+
 void
 init_round(struct mandelbrot_thread *args)
 {
 	// Initialize or reinitialize here variables before any thread starts or restarts computation
+	
+#if LOADBALANCE == 1
+	next_row = 0;
+#elif LOADBALANCE == 2
+  next_chunk = 0;
+#endif
 }
 
 /*
@@ -154,9 +171,58 @@ parallel_mandelbrot(struct mandelbrot_thread *args, struct mandelbrot_param *par
 #endif
 #if LOADBALANCE == 1
 	// Your load-balanced smarter solution. Compiled only if LOADBALANCE = 1
+	
+	// Compute one row of the picture in each iteration. next_row protected with mutex.
+	while (1)
+	{
+	  int row;
+	  
+	  pthread_mutex_lock(&next_row_mutex);
+	  if (next_row >= parameters->height) {
+	    pthread_mutex_unlock(&next_row_mutex);
+	    break;
+	  }
+	  
+	  row = next_row++;
+	  pthread_mutex_unlock(&next_row_mutex);
+	
+	  // One row
+	  parameters->begin_h = row;
+  	parameters->end_h = row + 1;
+	
+	  // Entire width: from 0 to picture's width
+	  parameters->begin_w = 0;
+	  parameters->end_w = parameters->width;
+	
+	  // Go
+	  compute_chunk(parameters);
+	}
 #endif
 #if LOADBALANCE == 2
 	// A second *optional* load-balancing solution. Compiled only if LOADBALANCE = 2
+	
+	// Compute a chunk of a single row of the picture in each iteration. next_chunk accessed and incremented using atomic instructions.
+	while (1)
+	{
+	  int chunk = __sync_fetch_and_add(&next_chunk, 1);
+	  if (chunk >= (parameters->height << LINE_SPLIT_TWO_POWER))
+	    break;
+	
+	  // Split each row into LINE_SPLIT chunks
+	  int row = chunk >> LINE_SPLIT_TWO_POWER;
+	  parameters->begin_h = row;
+  	parameters->end_h = row + 1;
+	
+	  // Calculate the chunk width
+	  int chunk_width = parameters->width >> LINE_SPLIT_TWO_POWER;
+	  int mult = chunk & CHUNK_MASK;
+	  
+	  parameters->begin_w = mult * chunk_width;
+	  parameters->end_w = MIN(parameters->begin_w + chunk_width, parameters->width);
+	
+	  // Go
+	  compute_chunk(parameters);
+	}
 #endif
 }
 /***** end *****/

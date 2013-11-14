@@ -1,0 +1,268 @@
+#!/bin/bash -f
+
+. ./settings
+. ./variables
+
+log_start()
+{
+	echo -n "$@"
+	echo -n "$@" >> $logfile
+
+}
+
+log_stop()
+{
+	echo "$@"
+	echo "$@" >> $logfile
+}
+
+log()
+{
+	log_start "$@"
+	log_stop ""
+}
+
+run()
+{
+#	log "[CMD] " "$@"
+	$@
+}
+
+info_start()
+{
+	log_start '[INFO] '"$@"
+}
+
+info_stop()
+{
+	log_stop "$@"
+}
+
+info()
+{
+	info_start "$@"
+	info_stop ""
+}
+
+error()
+{
+	log '[ERROR] '"$@"
+}
+
+usage()
+{
+	echo ./start \[compile\|run\] \<experiment\>
+}
+
+cut_head()
+{
+	echo \(`echo $@|cut -f 1 -d ' ' --complement`\)
+}
+
+build_args()
+{
+	# $1 is the variable containing the list of variables to be listed
+	# build_args `eval cut_head ${1[@]}`|while read tail; do echo ${1[1]}\ $tail; done
+	eval myvars=\(`echo $@`\)
+	eval next_step=`cut_head ${myvars[@]}`
+	var=${myvars[0]}
+
+	for val in `eval echo \$\{$var\[\@\]\}`
+	do
+		if [ "x$#" != "x1" ];
+		then
+			build_args ${next_step[@]}|while read line
+			do
+				echo $val $line
+			done
+		else
+			echo $val
+		fi
+	done
+}
+
+count_args()
+{
+	count=1
+	eval myvars=\(`echo $@`\)
+
+	for var in ${myvars[@]};
+	do
+		count=$(($count * $(echo $(eval echo \$\{$var\[\@\]\})|wc -w)))
+	done
+	echo $count
+}
+
+merge_data()
+{
+	info Merging all results of the same experiment together
+
+	echo -e $HEADER > $data$ext
+	echo %\ ${compile[@]}\ ${run[@]}\ $output >> $data$ext
+	cat data-$experiment-*.m|grep -v %|grep -v function|grep -v ^x|grep -v end|grep -v ']' >> $data$ext
+	echo -e $FOOTNOTE >> $data$ext
+}
+
+compile()
+{
+	total_instances=`count_args ${compile[@]}`
+	info Will compile $total_instances settings
+
+	compile_counter=1
+	compile_success=0
+	start_time=`date +%s`
+	build_args ${compile[@]}|while read args; do
+		info_start Setting $compile_counter/$total_instances: `for i in $(seq 0 $((${#compile[@]} - 1)));do echo "${compile[$i]}=$(echo $args|cut -d ' ' -f $(($i + 1)))"; done`"... "
+		instance_start=`date +%s`
+		bash ./compile $args 2>&1 > /dev/null
+		success=$?
+
+		instance_stop=`date +%s`
+
+		if [ "x$success" == "x0" ]; then
+			outcome="OK"
+		else
+			outcome="Failed"
+			compile_success=1
+		fi
+
+		info_stop $outcome. $(($instance_stop - $instance_start)) seconds \($((($instance_stop - $instance_start) / 60)) minutes or $((($instance_stop - $instance_start) / 60 / 60)) hours\).
+
+		if [ "x$compile_counter" == "x$total_instances" ]; then
+			exit $compile_success
+		fi
+
+		compile_counter=$(($compile_counter + 1))
+	done
+
+	compile_success=${PIPESTATUS[1]}
+	if [ "x$compile_success" == "x0" ]; then
+		compile_outcome="Success"
+	else
+		compile_outcome="Failed"
+	fi
+	
+	stop_time=`date +%s`
+	overall_time=$(($stop_time - start_time))
+	info $compile_outcome. Compilation took $overall_time seconds \($(($overall_time / 60)) minutes or $(($overall_time / 60 / 60)) hours\) or $(($overall_time / $total_instances)) seconds per compilation setting \($(($overall_time / $total_instances / 60)) minutes or $(($overall_time / $total_instances / 60 / 60)) hours\).
+
+	return $compile_success
+}
+
+batch()
+{
+	run_instances=`count_args ${run[@]}`
+	compile_instances=`count_args ${compile[@]}`
+	total_instances=$(($run_instances * $compile_instances))
+
+	info Will run $total_instances instances
+
+	# Initialize output file
+	start_time=`date +%s`
+	filename=$data-$experiment-`date|tr ' ' _|tr : -`$ext
+	echo -e $HEADER > $filename
+	echo %\ ${compile[@]}\ ${run[@]}\ $output >> $filename
+
+	batch_success=0
+	compile_counter=0
+
+	build_args ${compile[@]}|while read flags; do
+		run_counter=1
+		run_success=0
+		build_args ${run[@]}|while read args; do
+			info_start Instance $((compile_counter * $run_instances + $run_counter))/$total_instances: `for i in $(seq 0 $((${#compile[@]} - 1)));do echo "${compile[$i]}=$(echo $flags|cut -d ' ' -f $(($i + 1))) "; done``for i in $(seq 0 $((${#run[@]} - 1)));do echo "${run[$i]}=$(echo $args|cut -d ' ' -f $(($i + 1)))"; done`"... "
+			instance_start=`date +%s`
+			file_size=$(cat $filename|wc -l)
+			bash ./run $flags $args|while read line;
+			do
+				# Add content to output file
+				echo $flags $args $line >> $filename
+			done
+			
+			success=${PIPESTATUS[0]}
+			if [ "x$success" == "x0" ]; then
+				outcome="OK"
+			else
+				outcome="Failed"
+
+				# Remove lines from output file
+				cat $filename|head -$file_size > /tmp/pid.$$.results.tmp
+				cp /tmp/pid.$$.results.tmp $filename
+				rm /tmp/pid.$$.results.tmp
+
+				run_success=1
+			fi
+
+			instance_stop=`date +%s`
+			info_stop $outcome. $(($instance_stop - $instance_start)) seconds \($((($instance_stop - $instance_start) / 60)) minutes or $((($instance_stop - $instance_start) / 60 / 60)) hours\).
+
+			if [ "x$run_counter" == "x$run_instances" ]; then
+				exit $run_success
+			fi
+
+			run_counter=$(($run_counter + 1))
+		done
+
+		success=${PIPESTATUS[1]}
+		if [ "x$success" == "x0" ]; then
+			outcome="OK"
+		else
+			outcome="Failed"
+			batch_success=1
+		fi
+
+		if [ "x$compile_counter" == "x$(($compile_instances - 1))" ]; then
+			exit $batch_success
+		fi
+
+		compile_counter=$(($compile_counter + 1))
+	done
+
+	batch_success=${PIPESTATUS[1]}
+	if [ "x$batch_success" == "x0" ]; then
+		batch_outcome="Success"
+	else
+		batch_outcome="Failed"
+	fi
+	
+	# Finalize output file
+	echo -e $FOOTNOTE >> $filename
+	stop_time=`date +%s`
+	overall_time=$(($stop_time - start_time))
+	info $batch_outcome. Instances took $overall_time seconds \($(($overall_time / 60)) minutes or $(($overall_time / 60 / 60)) hours\) to run, or $(($overall_time / $total_instances)) seconds per instance run \($(($overall_time / $total_instances / 60)) minutes or $(($overall_time / $total_instances / 60 / 60)) hours\).
+
+	return $batch_success
+}
+
+operation=$1
+experiment=$2
+
+echo -n "" > $logfile
+
+case "x$operation" in
+	"xcompile")
+		compile
+
+		exit $?
+	;;
+	"xrun")
+		if [ "x$experiment" == "x" ];
+		then
+			error You must name the experiment to be run
+			usage
+			exit 1
+		else
+			batch
+			batch_success=$?
+			merge_data
+
+			exit $batch_success
+		fi
+	;;
+	*)
+		error Unknown operation
+		usage
+
+		exit 1
+	;;
+esac

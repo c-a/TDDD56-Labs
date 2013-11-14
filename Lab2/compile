@@ -1,0 +1,9 @@
+#!/bin/bash -f
+
+measure=$1
+max_push_pop=$2
+nb_threads=$3
+non_blocking=$4
+
+make MEASURE=$measure MAX_PUSH_POP=$max_push_pop NB_THREADS=$nb_threads NON_BLOCKING=$non_blocking SUFFIX=-$measure-$max_push_pop-$nb_threads-$non_blocking
+

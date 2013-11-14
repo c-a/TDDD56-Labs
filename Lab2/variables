@@ -1,0 +1,15 @@
+#!/bin/bash -f
+
+run=(try)
+
+output="thread global_start_sec global_start_nsec global_stop_sec global_stop_nsec thread_start_sec thread_start_nsec thread_stop_sec thread_stop_nsec"
+
+try="`seq 1 10`"				# Number of different run per setting
+
+compile=(measure max_push_pop nb_threads non_blocking)
+
+measure="1 2"
+max_push_pop="5000000"
+nb_threads=`seq 1 6`
+non_blocking="0 1 2"
+

@@ -1,0 +1,14 @@
+#!/bin/bash -f
+
+# settings from compilation
+measure=$1
+max_push_pop=$2
+nb_threads=$3
+non_blocking=$4
+
+# settings from run
+try=$5
+
+./stack-$measure-$max_push_pop-$nb_threads-$non_blocking
+
+exit 0

@@ -1,5 +1,7 @@
 % maxiter width height lower_r upper_r lower_i upper_i nb_thread loadbalance try thread thread_start_time_sec thread_start_time_nsec thread_stop_time_sec thread_stop_time_nsec global_start_time_sec global_start_time_nsec global_stop_time_sec global_stop_time_nsec
 
+addpath("octave")
+
 globalperf = select(data, [8 9 16 17 18 19]); % keep nb_threads and global timings
 globalperf = duplicate(globalperf, [1 1 1 1 1 2]); % create 1 more columns to calculate timings
 globalperf = apply(globalperf, 7, @time_difference_global); % compute the time delta from data gathered

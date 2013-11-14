@@ -99,7 +99,7 @@ merge_data()
 
 	echo -e $HEADER > $data$ext
 	echo %\ ${compile[@]}\ ${run[@]}\ $output >> $data$ext
-	cat data-$experiment-*.m|grep -v %|grep -v function|grep -v ^x|grep -v end|grep -v ']' >> $data$ext
+	cat $data-$experiment-*$ext| grep -v %|grep -v function|grep -v ^x|grep -v end|grep -v ']' >> $data$ext
 	echo -e $FOOTNOTE >> $data$ext
 }
 
@@ -237,6 +237,7 @@ batch()
 operation=$1
 experiment=$2
 
+set +f
 echo -n "" > $logfile
 
 case "x$operation" in

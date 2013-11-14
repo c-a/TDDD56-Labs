@@ -37,6 +37,20 @@
 
 #if NON_BLOCKING == 0
 #warning Stacks are synchronized through locks
+
+struct stack_node
+{
+  void *data;
+  struct stack_node *prev;
+};
+typedef struct stack_node stack_node;
+
+struct stack
+{
+  stack_node *head;
+  pthread_mutex_t mutex;  
+};
+
 #else
 #if NON_BLOCKING == 1 
 #warning Stacks are synchronized through lock-based CAS
@@ -45,23 +59,37 @@
 #endif
 #endif
 
+static int stack_init(stack_t *stack);
+
 stack_t *
-stack_alloc()
+stack_alloc(void)
 {
-  // Example of a task allocation with correctness control
-  // Feel free to change it
-  stack_t *res;
+  stack_t *stack;
 
-  res = malloc(sizeof(stack_t));
-  assert(res != NULL);
-
-  if (res == NULL)
+  stack = malloc(sizeof(struct stack));
+  if (stack == NULL)
     return NULL;
 
-// You may allocate a lock-based or CAS based stack in
-// different manners if you need so
+  if (stack_init(stack) != 0)
+  {
+    free(stack);
+    return NULL;
+  }
+
+  return stack;
+}
+
+static int
+stack_init(stack_t *stack)
+{
+  assert(stack != NULL);
+
+  stack->head = NULL;
+
 #if NON_BLOCKING == 0
   // Implement a lock_based stack
+  if (pthread_mutex_init(&stack->mutex, NULL) != 0)
+    return -1;
 #elif NON_BLOCKING == 1
   /*** Optional ***/
   // Implement a harware CAS-based stack
@@ -69,23 +97,36 @@ stack_alloc()
   // Implement a harware CAS-based stack
 #endif
 
-  return res;
+  return 0;
 }
 
 int
-stack_init(stack_t *stack, size_t size)
+stack_free(stack_t *stack)
 {
-  assert(stack != NULL);
-  assert(size > 0);
+  stack_node *node;
 
+  assert(stack != NULL);
+
+  // Free all nodes
+  node = stack->head;
+  while (node != NULL)
+  {
+    stack_node *tmp = node->prev;
+    free(node);
+    node = tmp;
+  }
+  
 #if NON_BLOCKING == 0
-  // Implement a lock_based stack
+  if (pthread_mutex_destroy(&stack->mutex) == 0)
+    return -1;
 #elif NON_BLOCKING == 1
   /*** Optional ***/
   // Implement a harware CAS-based stack
 #else
   // Implement a harware CAS-based stack
 #endif
+
+  free(stack);
 
   return 0;
 }
@@ -107,10 +148,25 @@ stack_check(stack_t *stack)
 }
 
 int
-stack_push(stack_t *stack, void* buffer)
+stack_push(stack_t *stack, void* data)
 {
+  stack_node *new;
+
+  assert(stack != NULL);
+
+  new = calloc(sizeof(stack_t), 1);
+  if (new == NULL)
+    return -1;
+
+  new->data = data;
+
 #if NON_BLOCKING == 0
   // Implement a lock_based stack
+  pthread_mutex_lock(&stack->mutex);
+  new->prev = stack->head;
+  stack->head = new;
+  pthread_mutex_unlock(&stack->mutex);
+
 #elif NON_BLOCKING == 1
   /*** Optional ***/
   // Implement a harware CAS-based stack
@@ -122,16 +178,34 @@ stack_push(stack_t *stack, void* buffer)
 }
 
 int
-stack_pop(stack_t *stack, void* buffer)
+stack_pop(stack_t *stack, void** data)
 {
+  stack_node *popped = NULL;
+
+  assert(stack != NULL);
+
 #if NON_BLOCKING == 0
   // Implement a lock_based stack
+  pthread_mutex_lock(&stack->mutex);
+  if (stack->head != NULL) {
+    popped = stack->head;
+    stack->head = popped->prev;
+  }
+  pthread_mutex_unlock(&stack->mutex);
+
 #elif NON_BLOCKING == 1
   /*** Optional ***/
   // Implement a harware CAS-based stack
 #else
   // Implement a harware CAS-based stack
 #endif
+
+  if (popped == NULL)
+    return -1;
+
+  if (data != NULL)
+    *data = popped->data;
+  free(popped);
 
   return 0;
 }

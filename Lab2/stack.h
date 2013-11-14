@@ -27,17 +27,15 @@
 #ifndef STACK_H
 #define STACK_H
 
-struct stack
-{
-  // This is a fake structure; change it to your needs
-  int change_this_member;
-};
-
 typedef struct stack stack_t;
 
-// Pushes an element in a thread-safe manner
-int stack_push_safe(stack_t *, void*);
-// Pops an element in a thread-safe manner
-int stack_pop_safe(stack_t *, void*);
+stack_t * stack_alloc(void);
+int       stack_free(stack_t *stack);
+
+int       stack_push(stack_t *stack, void* data);
+int       stack_pop(stack_t *stack, void** data);
+
+int       stack_check(stack_t *stack);
+
 
 #endif /* STACK_H */

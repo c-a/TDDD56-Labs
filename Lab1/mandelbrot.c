@@ -130,7 +130,7 @@ compute_chunk(struct mandelbrot_param *args)
 static int next_row;
 static pthread_mutex_t next_row_mutex = PTHREAD_MUTEX_INITIALIZER;
 #elif LOADBALANCE == 2
-static int next_chunk;
+static volatile int next_chunk;
 
 #define LINE_SPLIT_TWO_POWER 2
 #define LINE_SPLIT (1 << LINE_SPLIT_TWO_POWER)

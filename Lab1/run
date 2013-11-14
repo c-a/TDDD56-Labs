@@ -1,0 +1,17 @@
+#!/bin/bash -f
+
+# settings from compilation
+maxiter=$1
+width=$2
+height=$3
+lower_r=$4
+upper_r=$5
+lower_i=$6
+upper_i=$7
+nb_threads=$8
+loadbalance=$9
+
+# settings from the run
+try=$10
+
+./mandelbrot-$maxiter-$width-$height-$lower_r-$upper_r-$lower_i-$upper_i-$nb_threads-$loadbalance

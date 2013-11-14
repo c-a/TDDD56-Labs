@@ -1,0 +1,19 @@
+#!/bin/bash -f
+
+run=(try)
+
+output="thread thread_start_time_sec thread_start_time_nsec thread_stop_time_sec thread_stop_time_nsec global_start_time_sec global_start_time_nsec global_stop_time_sec global_stop_time_nsec"
+
+try=`seq 1 10`				# Number of different run per setting
+
+compile=(maxiter width height lower_r upper_r lower_i upper_i nb_thread loadbalance)
+
+maxiter=256 				# int max: 2147483647
+width=500
+height=375
+lower_r=-2
+upper_r=0.6
+lower_i=-1
+upper_i=1
+nb_thread=`seq 0 6`			# From 0 to 8 threads
+loadbalance="0 1 2"

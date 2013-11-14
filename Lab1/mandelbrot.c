@@ -21,6 +21,10 @@
 #include <pthread.h>
 #endif
 
+#define MIN(x, y) (((x) < (y)) ? (x) : (y))
+#define MAX(x, y) (((x) > (y)) ? (x) : (y))
+#define N_ELEMENTS(x) (sizeof(x) / sizeof((x)[0]))
+
 color_t *color = NULL;
 
 #if NB_THREADS > 0
@@ -121,8 +125,6 @@ compute_chunk(struct mandelbrot_param *args)
 
 /***** You may modify this portion *****/
 #if NB_THREADS > 0
-
-#define MIN(x, y) (((x) < (y)) ? (x) : (y))
 
 #if LOADBALANCE == 1
 static int next_row;
@@ -314,7 +316,13 @@ void
 update_colors(struct mandelbrot_param* param)
 {
 	// Gradient color
-	color_t start, stop;
+	color_t colors[] = {
+	  { 255, 0, 0 },
+	  { 0, 255, 0 },
+	  { 0, 0, 255 },
+	  { 0, 255, 255 },
+	  { 255, 0, 255 }
+	};
 	// Other control variables
 	int i;
 
@@ -324,22 +332,12 @@ update_colors(struct mandelbrot_param* param)
 	}
 	color = malloc(sizeof(color_t) * num_colors(param));
 
-	// Start color
-	start.red = 219;
-	start.green = 57;
-	start.blue = 0;
-
-	// Stop color
-	stop.red = 0;
-	stop.green = 0;
-	stop.blue = 0;
-
 	// Initialize the color vector
 	for (i = 0; i < num_colors(param); i++)
 	{
-		color[i].green = (stop.green - start.green) * ((double) i / num_colors(param)) + start.green;
-		color[i].red = (stop.red - start.red) * ((double) i / num_colors(param)) + start.red;
-		color[i].blue = (stop.blue - start.blue) * ((double) i / num_colors(param)) + start.blue;
+		color[i].green = MAX(0, colors[i % N_ELEMENTS(colors)].green - 2*i);
+		color[i].red = MAX(0, colors[i % N_ELEMENTS(colors)].red - 2*i);
+		color[i].blue = MAX(0, colors[i % N_ELEMENTS(colors)].blue - 2*i);
 	}
 }
 

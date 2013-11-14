@@ -121,6 +121,9 @@ compute_chunk(struct mandelbrot_param *args)
 
 /***** You may modify this portion *****/
 #if NB_THREADS > 0
+
+#define MIN(x, y) (((x) < (y)) ? (x) : (y))
+
 void
 init_round(struct mandelbrot_thread *args)
 {
@@ -135,6 +138,19 @@ parallel_mandelbrot(struct mandelbrot_thread *args, struct mandelbrot_param *par
 {
 #if LOADBALANCE == 0
 	// naive *parallel* implementation. Compiled only if LOADBALANCE = 0
+	
+	// Give each thread a slice of height "picture's width / NB_THREADS"
+	int slice_height = (parameters->width + NB_THREADS - 1) / NB_THREADS;
+	parameters->begin_h = args->id * slice_height;
+	parameters->end_h = MIN((args->id + 1) * slice_height, parameters->height);
+	
+	// Entire width: from 0 to picture's width
+	parameters->begin_w = 0;
+	parameters->end_w = parameters->width;
+
+	// Go
+	compute_chunk(parameters);
+	
 #endif
 #if LOADBALANCE == 1
 	// Your load-balanced smarter solution. Compiled only if LOADBALANCE = 1

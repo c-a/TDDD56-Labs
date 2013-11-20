@@ -158,8 +158,8 @@ parallel_mandelbrot(struct mandelbrot_thread *args, struct mandelbrot_param *par
 #if LOADBALANCE == 0
 	// naive *parallel* implementation. Compiled only if LOADBALANCE = 0
 	
-	// Give each thread a slice of height "picture's width / NB_THREADS"
-	int slice_height = (parameters->width + NB_THREADS - 1) / NB_THREADS;
+	// Give each thread a slice of height "picture's height / NB_THREADS"
+	int slice_height = (parameters->height + NB_THREADS - 1) / NB_THREADS;
 	parameters->begin_h = args->id * slice_height;
 	parameters->end_h = MIN((args->id + 1) * slice_height, parameters->height);
 	

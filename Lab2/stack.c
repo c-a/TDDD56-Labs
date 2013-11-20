@@ -35,16 +35,9 @@
 #include "stack.h"
 #include "non_blocking.h"
 
-struct stack_node
-{
-  void *data;
-  struct stack_node *prev;
-};
-typedef struct stack_node stack_node;
-
 struct stack
 {
-  stack_node *head;
+  stack_node_t *head;
 #if NON_BLOCKING == 0
 #warning Stacks are synchronized through locks
   pthread_mutex_t mutex;
@@ -101,7 +94,7 @@ stack_init(stack_t *stack)
 int
 stack_free(stack_t *stack)
 {
-  stack_node *node;
+  stack_node_t *node;
 
   assert(stack != NULL);
 
@@ -109,7 +102,7 @@ stack_free(stack_t *stack)
   node = stack->head;
   while (node != NULL)
   {
-    stack_node *tmp = node->prev;
+    stack_node_t *tmp = node->prev;
     free(node);
     node = tmp;
   }
@@ -144,49 +137,51 @@ stack_check(stack_t *stack)
   return 0;
 }
 
-int
-stack_push(stack_t *stack, void* data)
+stack_node_t *
+stack_node_alloc(void)
 {
-  stack_node *new;
+  stack_node_t *node;
 
+  node = calloc(sizeof(struct stack_node), 1);
+  return node;
+}
+
+int
+stack_push(stack_t *stack, stack_node_t* node)
+{
   assert(stack != NULL);
-
-  new = calloc(sizeof(stack_t), 1);
-  if (new == NULL)
-    return -1;
-
-  new->data = data;
+  assert(node != NULL);
 
 #if NON_BLOCKING == 0
   // Implement a lock_based stack
   pthread_mutex_lock(&stack->mutex);
-  new->prev = stack->head;
-  stack->head = new;
+  node->prev = stack->head;
+  stack->head = node;
   pthread_mutex_unlock(&stack->mutex);
 #elif NON_BLOCKING == 1
   /*** Optional ***/
   // Implement a software CAS-based stack
-  stack_node *head;
+  stack_node_t *head;
   do {
     head = stack->head;
-    new->prev = head;
-  } while (software_cas((size_t*)&stack->head, (size_t)head, (size_t)new, &stack->lock) != (size_t)head);
+    node->prev = head;
+  } while (software_cas((size_t*)&stack->head, (size_t)head, (size_t)node, &stack->lock) != (size_t)head);
 #else
-  // Implement a harware CAS-based stack
-  stack_node *head;
+  // Implement a hardware CAS-based stack
+  stack_node_t *head;
   do {
     head = stack->head;
-    new->prev = head;
-  } while (cas((size_t*)&stack->head, (size_t)head, (size_t)new) != (size_t)head);
+    node->prev = head;
+  } while (cas((size_t*)&stack->head, (size_t)head, (size_t)node) != (size_t)head);
 #endif
 
   return 0;
 }
 
 int
-stack_pop(stack_t *stack, void** data)
+stack_pop(stack_t *stack, stack_node_t** node)
 {
-  stack_node *popped = NULL;
+  stack_node_t *popped = NULL;
 
   assert(stack != NULL);
 
@@ -201,14 +196,14 @@ stack_pop(stack_t *stack, void** data)
 #elif NON_BLOCKING == 1
   /*** Optional ***/
   // Implement a software CAS-based stack
-  stack_node *new_head;
+  stack_node_t *new_head;
   do {
     popped = stack->head;
     new_head = popped != NULL ? popped->prev : NULL;
   } while (software_cas((size_t*)&stack->head, (size_t)popped, (size_t)new_head, &stack->lock) != (size_t)popped);
 #else
   // Implement a hardware CAS-based stack
-  stack_node *new_head;
+  stack_node_t *new_head;
   do {
     popped = stack->head;
     new_head = popped != NULL ? popped->prev : NULL;
@@ -218,9 +213,76 @@ stack_pop(stack_t *stack, void** data)
   if (popped == NULL)
     return -1;
 
-  if (data != NULL)
-    *data = popped->data;
-  free(popped);
+  if (node != NULL)
+    *node = popped;
+  else
+    free(popped);
+
+  return 0;
+}
+
+static void
+aba_helper(sem_t* read_a_sem, sem_t* reinsert_a_sem)
+{
+    printf("Thread 1: Has read A\n");
+
+    // Signal other thread that we have read A
+    sem_post(read_a_sem);
+
+    printf("Thread 1: Waiting for Thread 2 to reinsert A\n");
+
+    // Wait for other thread to pop two elements and reinsert A
+    sem_wait(reinsert_a_sem);
+}
+
+int
+stack_pop_aba(stack_t *stack, stack_node_t** node,
+              sem_t* read_a_sem, sem_t* reinsert_a_sem)
+{
+  stack_node_t *popped = NULL;
+
+  assert(stack != NULL);
+
+#if NON_BLOCKING == 0
+  // Implement a lock_based stack
+  pthread_mutex_lock(&stack->mutex);
+  if (stack->head != NULL) {
+    popped = stack->head;
+    stack->head = popped->prev;
+  }
+  pthread_mutex_unlock(&stack->mutex);
+#elif NON_BLOCKING == 1
+  /*** Optional ***/
+  // Implement a software CAS-based stack
+  stack_node_t *new_head;
+  do {
+    popped = stack->head;
+    new_head = popped != NULL ? popped->prev : NULL;
+
+    // Code to enable test of ABA problem
+    aba_helper(read_a_sem, reinsert_a_sem);
+
+  } while (software_cas((size_t*)&stack->head, (size_t)popped, (size_t)new_head, &stack->lock) != (size_t)popped);
+#else
+  // Implement a hardware CAS-based stack
+  stack_node_t *new_head;
+  do {
+    popped = stack->head;
+    new_head = popped != NULL ? popped->prev : NULL;
+
+    // Code to enable test of ABA problem
+    aba_helper(read_a_sem, reinsert_a_sem);
+
+  } while (cas((size_t*)&stack->head, (size_t)popped, (size_t)new_head) != (size_t)popped);
+#endif
+
+  if (popped == NULL)
+    return -1;
+
+  if (node != NULL)
+    *node = popped;
+  else
+    free(popped);
 
   return 0;
 }

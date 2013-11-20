@@ -23,17 +23,30 @@
 
 #include <stdlib.h>
 #include <pthread.h>
+#include <semaphore.h>
 
 #ifndef STACK_H
 #define STACK_H
+
+struct stack_node
+{
+  void *data;
+  struct stack_node *prev;
+};
+typedef struct stack_node stack_node_t;
 
 typedef struct stack stack_t;
 
 stack_t * stack_alloc(void);
 int       stack_free(stack_t *stack);
 
-int       stack_push(stack_t *stack, void* data);
-int       stack_pop(stack_t *stack, void** data);
+stack_node_t * stack_node_alloc(void);
+
+int       stack_push(stack_t *stack, stack_node_t* node);
+int       stack_pop(stack_t *stack, stack_node_t** node);
+
+int       stack_pop_aba(stack_t *stack, stack_node_t** node,
+                        sem_t* read_a_sem, sem_t* reinsert_a_sem);
 
 int       stack_check(stack_t *stack);
 

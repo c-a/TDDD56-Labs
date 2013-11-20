@@ -1,5 +1,7 @@
 % measure max_push_pop nb_threads non_blocking try thread global_start_sec global_start_nsec global_stop_sec global_stop_nsec thread_start_sec thread_start_nsec thread_stop_sec thread_stop_nsec
 
+addpath("octave")
+
 globaltiming = select(data, [1 2 3 4 6 7 8 9 10 11 12 13 14]); % keep algorithm prevent_spawn trivial_size nb_threads loadbalance input_set input_size thread global_start_sec global_start_nsec global_stop_sec global_stop_nsec
 globaltiming = duplicate(globaltiming, [1 1 1 1 1 1 1 1 1 2 1 1 2]); % create 1 more columns to calculate timings
 globaltiming = apply(globaltiming, 10, @time_difference_global); % compute the time delta from data gathered

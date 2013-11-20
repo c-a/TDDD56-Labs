@@ -32,6 +32,8 @@
 #include <time.h>
 #include <stddef.h>
 
+#include <semaphore.h>
+
 #include "stack.h"
 #include "non_blocking.h"
 
@@ -55,6 +57,9 @@ typedef int data_t;
 static stack_t *stack;
 static data_t data;
 
+static stack_node_t *stack_nodes[MAX_PUSH_POP];
+static volatile int next_node;
+
 void
 test_init()
 {
@@ -64,9 +69,28 @@ test_init()
 void
 test_setup()
 {
+  int i;
+
   // Allocate and initialize your test stack before each test
   data = DATA_VALUE;
   stack = stack_alloc();
+
+  // Allocate MAX_PUSH_POP stack_nodes
+  for (i = 0; i < MAX_PUSH_POP; i++)
+  {
+    stack_nodes[i] = stack_node_alloc();
+  }
+  next_node = 0;
+
+#if MEASURE == 2
+  // Fill the stack with MAX_PUSH_POP elements
+  for (i = 0; i < MAX_PUSH_POP; i++)
+  {
+    stack_node_t *node = stack_nodes[i];
+    node->data = &data;
+    stack_push(stack, node);
+  }
+#endif
 }
 
 void
@@ -83,26 +107,34 @@ test_finalize()
   // Destroy properly your test batch
 }
 
-static void
+static int
 run_test_function(void* (*func)(void* arg))
 {
   pthread_attr_t attr;
   pthread_t thread[NB_THREADS];
 
   int i;
+  int result = 0;
 
   pthread_attr_init(&attr);
   pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE); 
 
+  // Run NB_THREADS that run func
   for (i = 0; i < NB_THREADS; i++)
     {
       pthread_create(&thread[i], &attr, func, NULL);
     }
 
+  // Wait for threads to finish
   for (i = 0; i < NB_THREADS; i++)
     {
-      pthread_join(thread[i], NULL);
+      void *ret;
+      pthread_join(thread[i], &ret);
+      if (ret != 0)
+        result = -1;
     }
+
+    return result;
 }
 
 static void*
@@ -112,17 +144,20 @@ thread_test_push(void* arg)
 
   for (i = 0; i < MAX_PUSH_POP; i++)
     {
-      stack_push(stack, &data);
+      stack_node_t *node = stack_node_alloc();
+      node->data = &data;
+      if (stack_push(stack, node) != 0)
+        return (void*)-1;
     }
 
-  return NULL; 
+  return (void*)0; 
 }
 
 int
 test_push_safe()
 {
   size_t counter;
-  void *buf;
+  stack_node_t *node;
 
   // Make sure your stack remains in a good state with expected content when
   // several threads push concurrently to it
@@ -130,10 +165,11 @@ test_push_safe()
   run_test_function(&thread_test_push);
 
   counter = 0;
-  while (stack_pop(stack, &buf) == 0)
+  while (stack_pop(stack, &node) == 0)
   {
-    if (buf != &data)
+    if (node->data != &data)
       return 0;
+    free(node);
     counter++;
   }
 
@@ -147,10 +183,12 @@ thread_test_pop(void* arg)
 
   for (i = 0; i < MAX_PUSH_POP; i++)
     {
-      stack_pop(stack, NULL);
+      stack_node_t *node;
+      if (stack_pop(stack, &node) != 0)
+        return (void*)-1;
     }
 
-  return NULL; 
+  return (void*)0; 
 }
 
 int
@@ -162,7 +200,9 @@ test_pop_safe()
 
   for (i = 0; i < NB_THREADS * MAX_PUSH_POP; i++)
     {
-      stack_push(stack, &data);
+      stack_node_t *node = stack_node_alloc();
+      node->data = &data;
+      stack_push(stack, node);
     }
 
   run_test_function(&thread_test_pop);
@@ -170,16 +210,114 @@ test_pop_safe()
   return stack_pop(stack, NULL) == -1;
 }
 
-// 3 Threads should be enough to raise and detect the ABA problem
-#define ABA_NB_THREADS 3
+pthread_barrier_t aba_barrier;
+sem_t aba_read_a_sem, aba_reinsert_a_sem; 
+
+stack_node_t *A, *B, *C;
+
+static void*
+aba_thread1(void* arg)
+{
+  stack_node_t* node;
+
+  // Try to pop the first element
+  printf("\nThread 1: Popping first element\n");
+  if (stack_pop_aba(stack, &node, &aba_read_a_sem, &aba_reinsert_a_sem) != 0)
+    return (void*)-1;
+  printf("Thread 1: Finished popping first element\n");
+
+  if (node != A)
+    return (void*)-1;
+
+  return (void*)0;
+}
+
+static void*
+aba_thread2(void* arg)
+{
+  stack_node_t* node;
+
+  printf("Thread 2: Waiting for Thread 1 to be in the middle of popping A\n");
+  // Wait for thread 1 to be in the middle of popping A
+  sem_wait(&aba_read_a_sem);
+
+  // Pop A
+  printf("Thread 2: Popping A\n");
+  if (stack_pop(stack, &node) != 0 || node != A)
+    goto error;
+  printf("Thread 2: Finished popping A\n");
+
+  // Pop B
+  printf("Thread 2: Popping B\n");
+  if (stack_pop(stack, &node) != 0 || node != B)
+    goto error;
+  printf("Thread 2: Finished popping B\n");
+
+  // Reinsert A
+  printf("Thread 2: Reinsert A\n");
+  if (stack_push(stack, A) != 0)
+    goto error;
+  printf("Thread 2: Finished reinserting A\n");
+
+  // Signal thread 1 that we have reinserted A
+  sem_post(&aba_reinsert_a_sem);
+
+  return (void*)0;
+
+error:
+  return (void*)-1;
+}
 
 int
 test_aba()
 {
-  int success, aba_detected = 0;
+  pthread_attr_t attr;
+  pthread_t thread1, thread2;
+  void *ret;
+  stack_node_t *node;
+
   // Write here a test for the ABA problem
-  success = aba_detected;
-  return success;
+
+  // Push C then B then A
+  C = stack_node_alloc(); C->data = &data;
+  stack_push(stack, C);
+
+  B = stack_node_alloc(); B->data = &data;
+  stack_push(stack, B);
+
+  A = stack_node_alloc(); A->data = &data;
+  stack_push(stack, A);
+
+
+  // Initialize semaphores to zero
+  sem_init(&aba_read_a_sem, 0, 0);
+  sem_init(&aba_reinsert_a_sem, 0, 0);
+
+  // Create the two threads needed to exercise the ABA problem
+  pthread_attr_init(&attr);
+  pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE); 
+
+  pthread_create(&thread1, &attr, aba_thread1, NULL);
+  pthread_create(&thread2, &attr, aba_thread2, NULL);
+
+  // Wait for threads to finish
+  pthread_join(thread1, &ret);
+  if (ret != 0)
+    return 0;
+  pthread_join(thread2, &ret);
+  if (ret != 0)
+    return 0;
+
+  // ABA is detected if the stack head is B
+  if (stack_pop(stack, &node) != 0)
+    return 0;
+
+  if (node == B) {
+    printf("The head of the stack is B although it should be C after the sequence: \n"
+           " pop -> pop -> push A -> pop.\n");
+  }
+
+  return node == B;
 }
 
 // We test here the CAS function
@@ -270,6 +408,40 @@ test_cas()
 #endif
 }
 
+#if MEASURE == 1
+static void*
+thread_test_performance_push(void* arg)
+{
+  int i;
+
+  for (i = 0; i < MAX_PUSH_POP/NB_THREADS; i++)
+    {
+      int node_index = __sync_fetch_and_add(&next_node, 1);
+      stack_node_t *node = stack_nodes[node_index];
+      node->data = &data;
+      if (stack_push(stack, node) != 0)
+        return (void*)-1;
+    }
+
+  return (void*)0; 
+}
+#elif MEASURE == 2
+static void*
+thread_test_performance_pop(void* arg)
+{
+  int i;
+
+  for (i = 0; i < MAX_PUSH_POP/NB_THREADS; i++)
+    {
+      stack_node_t *node;
+      if (stack_pop(stack, &node) != 0)
+        return (void*)-1;
+    }
+
+  return (void*)0; 
+}
+#endif
+
 // Stack performance test
 #if MEASURE != 0
 struct stack_measure_arg
@@ -312,11 +484,14 @@ setbuf(stdout, NULL);
 #if MEASURE == 1
       clock_gettime(CLOCK_MONOTONIC, &t_start[i]);
       // Push MAX_PUSH_POP times in parallel
+      run_test_function(&thread_test_performance_push);
       clock_gettime(CLOCK_MONOTONIC, &t_stop[i]);
 #else
       // Run pop-based performance test based on MEASURE token
+
       clock_gettime(CLOCK_MONOTONIC, &t_start[i]);
       // Pop MAX_PUSH_POP times in parallel
+      run_test_function(&thread_test_performance_pop);
       clock_gettime(CLOCK_MONOTONIC, &t_stop[i]);
 #endif
     }

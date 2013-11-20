@@ -37,7 +37,15 @@
 inline size_t
 software_cas(size_t* reg, size_t oldval, size_t newval, pthread_mutex_t *lock)
 {
-  // Implement lock-based cas yourself
+  size_t val;
+
+  pthread_mutex_lock(lock);
+  val = *reg;
+  if (val == oldval)
+    *reg = newval;
+  pthread_mutex_unlock(lock);
+
+  return val;
 }
 #endif
 

@@ -35,9 +35,6 @@
 #include "stack.h"
 #include "non_blocking.h"
 
-#if NON_BLOCKING == 0
-#warning Stacks are synchronized through locks
-
 struct stack_node
 {
   void *data;
@@ -48,16 +45,18 @@ typedef struct stack_node stack_node;
 struct stack
 {
   stack_node *head;
-  pthread_mutex_t mutex;  
-};
-
+#if NON_BLOCKING == 0
+#warning Stacks are synchronized through locks
+  pthread_mutex_t mutex;
 #else
 #if NON_BLOCKING == 1 
 #warning Stacks are synchronized through lock-based CAS
+  pthread_mutex_t lock;
 #else
 #warning Stacks are synchronized through hardware CAS
 #endif
 #endif
+};
 
 static int stack_init(stack_t *stack);
 
@@ -91,10 +90,9 @@ stack_init(stack_t *stack)
   if (pthread_mutex_init(&stack->mutex, NULL) != 0)
     return -1;
 #elif NON_BLOCKING == 1
-  /*** Optional ***/
-  // Implement a harware CAS-based stack
-#else
-  // Implement a harware CAS-based stack
+  // Implement a software CAS-based stack
+  if (pthread_mutex_init(&stack->lock, NULL) != 0)
+    return -1;
 #endif
 
   return 0;
@@ -120,10 +118,9 @@ stack_free(stack_t *stack)
   if (pthread_mutex_destroy(&stack->mutex) == 0)
     return -1;
 #elif NON_BLOCKING == 1
-  /*** Optional ***/
-  // Implement a harware CAS-based stack
-#else
-  // Implement a harware CAS-based stack
+  // Implement a software CAS-based stack
+  if (pthread_mutex_destroy(&stack->lock) == 0)
+    return -1;
 #endif
 
   free(stack);
@@ -166,12 +163,21 @@ stack_push(stack_t *stack, void* data)
   new->prev = stack->head;
   stack->head = new;
   pthread_mutex_unlock(&stack->mutex);
-
 #elif NON_BLOCKING == 1
   /*** Optional ***/
-  // Implement a harware CAS-based stack
+  // Implement a software CAS-based stack
+  stack_node *head;
+  do {
+    head = stack->head;
+    new->prev = head;
+  } while (software_cas((size_t*)&stack->head, (size_t)head, (size_t)new, &stack->lock) != (size_t)head);
 #else
   // Implement a harware CAS-based stack
+  stack_node *head;
+  do {
+    head = stack->head;
+    new->prev = head;
+  } while (cas((size_t*)&stack->head, (size_t)head, (size_t)new) != (size_t)head);
 #endif
 
   return 0;
@@ -192,12 +198,21 @@ stack_pop(stack_t *stack, void** data)
     stack->head = popped->prev;
   }
   pthread_mutex_unlock(&stack->mutex);
-
 #elif NON_BLOCKING == 1
   /*** Optional ***/
-  // Implement a harware CAS-based stack
+  // Implement a software CAS-based stack
+  stack_node *new_head;
+  do {
+    popped = stack->head;
+    new_head = popped != NULL ? popped->prev : NULL;
+  } while (software_cas((size_t*)&stack->head, (size_t)popped, (size_t)new_head, &stack->lock) != (size_t)popped);
 #else
-  // Implement a harware CAS-based stack
+  // Implement a hardware CAS-based stack
+  stack_node *new_head;
+  do {
+    popped = stack->head;
+    new_head = popped != NULL ? popped->prev : NULL;
+  } while (cas((size_t*)&stack->head, (size_t)popped, (size_t)new_head) != (size_t)popped);
 #endif
 
   if (popped == NULL)

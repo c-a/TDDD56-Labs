@@ -287,3 +287,20 @@ stack_pop_aba(stack_t *stack, stack_node_t** node,
   return 0;
 }
 
+void stack_print_aba(stack_t *stack)
+{
+
+  stack_node_t *node = NULL;
+
+  assert(stack != NULL);
+
+  printf("Stack: ");
+  node = stack->head;
+  
+  while (node != NULL) {
+    printf("%s -> ", (char*)node->data);
+    node = node->prev;
+  }
+  printf("NULL\n");
+}
+

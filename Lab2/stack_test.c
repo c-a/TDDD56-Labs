@@ -57,7 +57,7 @@ typedef int data_t;
 static stack_t *stack;
 static data_t data;
 
-static stack_node_t *stack_nodes[MAX_PUSH_POP];
+static stack_node_t *stack_nodes[MAX_PUSH_POP+1];
 static volatile int next_node;
 
 void
@@ -222,6 +222,7 @@ aba_thread1(void* arg)
 
   // Try to pop the first element
   printf("\nThread 1: Popping first element\n");
+  stack_print_aba(stack);
   if (stack_pop_aba(stack, &node, &aba_read_a_sem, &aba_reinsert_a_sem) != 0)
     return (void*)-1;
   printf("Thread 1: Finished popping first element\n");
@@ -246,18 +247,21 @@ aba_thread2(void* arg)
   if (stack_pop(stack, &node) != 0 || node != A)
     goto error;
   printf("Thread 2: Finished popping A\n");
+  stack_print_aba(stack);
 
   // Pop B
   printf("Thread 2: Popping B\n");
   if (stack_pop(stack, &node) != 0 || node != B)
     goto error;
   printf("Thread 2: Finished popping B\n");
+  stack_print_aba(stack);
 
   // Reinsert A
   printf("Thread 2: Reinsert A\n");
   if (stack_push(stack, A) != 0)
     goto error;
   printf("Thread 2: Finished reinserting A\n");
+  stack_print_aba(stack);
 
   // Signal thread 1 that we have reinserted A
   sem_post(&aba_reinsert_a_sem);
@@ -275,19 +279,19 @@ test_aba()
   pthread_t thread1, thread2;
   void *ret;
   stack_node_t *node;
+  int res = 0;
 
   // Write here a test for the ABA problem
 
   // Push C then B then A
-  C = stack_node_alloc(); C->data = &data;
+  C = stack_node_alloc(); C->data = strdup("C");
   stack_push(stack, C);
 
-  B = stack_node_alloc(); B->data = &data;
+  B = stack_node_alloc(); B->data = strdup("B");
   stack_push(stack, B);
 
-  A = stack_node_alloc(); A->data = &data;
+  A = stack_node_alloc(); A->data = strdup("A");
   stack_push(stack, A);
-
 
   // Initialize semaphores to zero
   sem_init(&aba_read_a_sem, 0, 0);
@@ -308,6 +312,8 @@ test_aba()
   if (ret != 0)
     return 0;
 
+  stack_print_aba(stack);
+
   // ABA is detected if the stack head is B
   if (stack_pop(stack, &node) != 0)
     return 0;
@@ -315,9 +321,10 @@ test_aba()
   if (node == B) {
     printf("The head of the stack is B although it should be C after the sequence: \n"
            " pop -> pop -> push A -> pop.\n");
+    res = 1;
   }
 
-  return node == B;
+  return res;
 }
 
 // We test here the CAS function
@@ -408,10 +415,21 @@ test_cas()
 #endif
 }
 
+// Stack performance test
+#if MEASURE != 0
+struct stack_measure_arg
+{
+  int id;
+};
+typedef struct stack_measure_arg stack_measure_arg_t;
+
+struct timespec t_start[NB_THREADS], t_stop[NB_THREADS], start, stop;
+
 #if MEASURE == 1
 static void*
-thread_test_performance_push(void* arg)
+thread_test_performance_push(void* data)
 {
+  stack_measure_arg_t* arg = (stack_measure_arg_t*)data;
   int i;
 
   for (i = 0; i < MAX_PUSH_POP/NB_THREADS; i++)
@@ -423,12 +441,14 @@ thread_test_performance_push(void* arg)
         return (void*)-1;
     }
 
+  clock_gettime(CLOCK_MONOTONIC, &t_stop[arg->id]);
   return (void*)0; 
 }
 #elif MEASURE == 2
 static void*
-thread_test_performance_pop(void* arg)
+thread_test_performance_pop(void* data)
 {
+  stack_measure_arg_t* arg = (stack_measure_arg_t*)data;
   int i;
 
   for (i = 0; i < MAX_PUSH_POP/NB_THREADS; i++)
@@ -438,19 +458,11 @@ thread_test_performance_pop(void* arg)
         return (void*)-1;
     }
 
+  clock_gettime(CLOCK_MONOTONIC, &t_stop[arg->id]);
   return (void*)0; 
 }
 #endif
 
-// Stack performance test
-#if MEASURE != 0
-struct stack_measure_arg
-{
-  int id;
-};
-typedef struct stack_measure_arg stack_measure_arg_t;
-
-struct timespec t_start[NB_THREADS], t_stop[NB_THREADS], start, stop;
 #endif
 
 int
@@ -472,8 +484,13 @@ setbuf(stdout, NULL);
   // Run performance tests
   int i;
   stack_measure_arg_t arg[NB_THREADS];  
+  pthread_attr_t attr;
+  pthread_t thread[NB_THREADS];
 
   test_setup();
+
+  pthread_attr_init(&attr);
+  pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE); 
 
   clock_gettime(CLOCK_MONOTONIC, &start);
   for (i = 0; i < NB_THREADS; i++)
@@ -484,19 +501,22 @@ setbuf(stdout, NULL);
 #if MEASURE == 1
       clock_gettime(CLOCK_MONOTONIC, &t_start[i]);
       // Push MAX_PUSH_POP times in parallel
-      run_test_function(&thread_test_performance_push);
-      clock_gettime(CLOCK_MONOTONIC, &t_stop[i]);
+      pthread_create(&thread[i], &attr, &thread_test_performance_push, &arg[i]);
 #else
       // Run pop-based performance test based on MEASURE token
 
       clock_gettime(CLOCK_MONOTONIC, &t_start[i]);
       // Pop MAX_PUSH_POP times in parallel
-      run_test_function(&thread_test_performance_pop);
-      clock_gettime(CLOCK_MONOTONIC, &t_stop[i]);
+      pthread_create(&thread[i], &attr, &thread_test_performance_pop, &arg[i]);
 #endif
     }
 
   // Wait for all threads to finish
+  for (i = 0; i < NB_THREADS; i++)
+    {
+      pthread_join(thread[i], NULL);
+    }
+
   clock_gettime(CLOCK_MONOTONIC, &stop);
 
   // Print out results

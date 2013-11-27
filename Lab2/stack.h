@@ -48,6 +48,8 @@ int       stack_pop(stack_t *stack, stack_node_t** node);
 int       stack_pop_aba(stack_t *stack, stack_node_t** node,
                         sem_t* read_a_sem, sem_t* reinsert_a_sem);
 
+void      stack_print_aba(stack_t *stack);
+
 int       stack_check(stack_t *stack);
 
 

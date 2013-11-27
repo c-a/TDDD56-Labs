@@ -1,0 +1,38 @@
+#!/bin/bash -f
+
+# settings from compilation
+input_size=$1
+input_set=$2
+variant=$3
+nb_threads=$4
+
+# settings from run
+try=$5
+
+if [ "x$input_dir" == "x" ]; then
+	input_dir=/scratch/$USER
+fi
+
+mkdir -p $input_dir
+
+case $input_set in
+0)
+	input=$input_dir/rand-$input_size
+	;;
+1)
+	input=$input_dir/inc-$input_size
+	;;
+2)
+	input=$input_dir/dec-$input_size
+	;;
+3)
+	input=$input_dir/cons-$input_size
+	;;
+*)
+	echo [RUN][ERROR] Unknown input set: \"$input_set\"
+	exit 1
+esac
+
+./sort-$variant-$nb_threads $input
+
+exit $?

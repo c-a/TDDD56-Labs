@@ -1,0 +1,277 @@
+#!/bin/bash
+
+log_start()
+{
+	echo -n "$@"
+	echo -n "$@" >> "$active_dir/$logfile"
+}
+
+log_stop()
+{
+	echo "$@"
+	echo "$@" >> "$active_dir/$logfile"
+}
+
+log()
+{
+	log_start "$@"
+	log_stop ""
+}
+
+run()
+{
+	$@
+}
+
+info_start()
+{
+	log_start '[INFO] '"$@"
+}
+
+info_stop()
+{
+	log_stop "$@"
+}
+
+info()
+{
+	info_start "$@"
+	info_stop ""
+}
+
+error()
+{
+	log '[ERROR] '"$@"
+}
+
+ssh_run()
+{
+ssh $ssh "cd $ssh_remote_dir; $@"
+}
+
+check_source()
+{
+	unpack_dir="$1"
+	active_dir="$2"
+	serial="$3"
+	
+	safe_name="$serial-$name-$serial"
+
+	cd "$unpack_dir"
+
+	info Checking source files
+
+	## Check if Makefile includes the mandatory Makefile part
+	if [ "`grep \"^include Makefile.imposed\" Makefile`" == "include Makefile.imposed" ] && [ "`grep \"CFLAGS_IMPOSED\" Makefile`" == "" ] && [ "`grep \"LDFLAGS_IMPOSED\" Makefile`" == "" ]; then
+		makefile=0
+	else
+		error Invalid Makefile: include Makefile.imposed and do not refer to CFLAGS_IMPOSED nor LDFLAGS_IMPOSED
+		makefile=1
+	fi
+
+	## Check if disable.h ha been included
+	check=`grep -n "^#include \"disable.h\"$" sort.c`
+	if [ "a$check" == "a26:#include \"disable.h\"" ] && [ "`grep \"#undef\" sort.c|grep qsort`" == "" ]; then
+		sort=0
+	else
+		error Invalid sort.c: Include disable.h at the third line and do not \#undef qsort
+		sort=1
+	fi
+
+	if [ "x$makefile" == "x0" ] && [ "x$sort" == "x0" ]; then
+		includes=0
+	else
+		includes=1
+	fi
+
+	## Wrap up
+	if [ "x$includes" == "x0" ]; then
+		info Source files are valid
+		cd "$active_dir"
+		return 0
+	else
+		error Sources files have been modified
+		cd "$active_dir"
+		return 1
+	fi
+}
+
+run_batch()
+{
+	unpack_dir="$1"
+	active_dir="$2"
+	name="$3"
+	serial="$4"
+	
+	safe_name="$serial-$name-$serial"
+
+	cd "$unpack_dir"
+
+	info Compiling and running batch
+
+	## Copy input sets to unpack_dir
+	cp "$input_ref_dir"/* "$unpack_dir/"
+	export input_dir=$unpack_dir
+
+	rm -rf "data-$safe_name"*.m
+	if [ -f Makefile ]; then
+		make clean && bash start compile && bash start run "$safe_name"
+		batch_success=$?
+	else
+		bash start compile && bash start run "$safe_name"
+		batch_success=$?
+	fi
+
+	if [ "x$batch_success" != "x0" ]; then
+		error Compile or run batch produced errors
+		rm data-$safe_name*.m
+		cd "$active_dir"
+		return 1
+	else
+		info Batch ran successfully
+		cd "$active_dir"
+		return 0
+	fi
+}
+
+setup()
+{
+	unpack_dir="$1"
+	active_dir="$2"
+	rep="$3"
+	name="$4"
+	serial="$5"
+	
+	safe_name="$serial-$name-$serial"
+
+	rm -rf "$unpack_dir"
+	mkdir -p "$unpack_dir"
+	chmod 700 "$unpack_dir"
+
+	cd "$rep"
+	make dist "ARCHIVE=$unpack_dir/$safe_name.zip"
+
+	cd "$unpack_dir"
+	unzip -o "$safe_name.zip"
+
+	# Copy reference files
+	cp "$ref_dir"/* "$unpack_dir/"
+
+	cd "$active_dir"
+}
+
+check_data()
+{
+	unpack_dir="$1"
+	active_dir="$2"
+	name="$3"
+	serial="$4"
+	
+	safe_name="$serial-$name-$serial"
+
+	cd "$unpack_dir"
+
+	info Checking the data produced
+	# Check the results produced
+	octave check.m > /dev/null 2>&1
+	valid_data=$?
+
+	if [ "x$valid_data" == "x0" ]; then
+		info Produced data is valid
+		echo "$name" >> "$active_dir/participants"
+		
+		## Wait for the (network) filesystem to realize that the output file was produced
+		while [	"`ls $unpack_dir/data-$safe_name*.m`" == "" ]; do echo -n; done > /dev/null 2>&1
+
+		cp "$unpack_dir/data-$safe_name"*.m "$active_dir/"
+
+		cd "$active_dir"
+		return 0
+	else
+		error Invalid data
+
+		cd "$active_dir"
+		return 1
+	fi
+}
+
+compute_results()
+{
+	unpack_dir="$1"
+	active_dir="$2"
+
+	cd "$active_dir"
+
+	if [ -f participants ]; then
+		info Synthetising all groups results...\ 
+
+		argument=""
+
+		echo "function x = group_names() x = {" > group_names.m
+		for i in `cat participants`; do
+			# Find the serial number given to the group (depends on its position in group file)
+			serial=`cat groups |grep -v ^#|grep -n ^$i\>|cut -f 1 -d ':'`
+			serial=$(($serial - 1))
+			safe_name="$serial-$i-$serial"
+
+			# Synthetise a participant group name octave function
+			# {"by try " "by input instance " "by input pattern "}
+			echo \"$i\ \" >> group_names.m
+
+			# Synthetise the correct command line to feed the merger
+			argument=$argument\ `ls data-$safe_name-*.m`
+		done
+		echo "}; endfunction" >> group_names.m
+
+		bash merge "$argument"
+		rm data.m
+		mv MERGED*.m data.m
+
+		octave plot_results.m > /dev/null 2>&1
+	else
+		error There was no participant providing valid results
+	fi
+	eps2png -tBf -o ~/www-pub final_scores.eps
+}
+
+assess()
+{
+	mkdir -p "$unpack_dir"
+	rm "$active_dir/participants"
+	rm MERGED*.m
+	rm data*.m
+	rm "$logfile"
+	rm "$full_logfile"
+
+#	cat groups|grep -v ^#|while read group; do
+	i=0
+	for group in `cat groups|grep -v ^#`; do
+		name=`echo $group|cut -f 1 -d '>'`
+		rep=`echo $group|cut -f 2 -d '>'`
+
+		info Assessing group "$name"
+
+		## Fetch and unpack the group's files
+		setup "$unpack_dir" "$active_dir" "$rep" "$name" "$i" &&
+	
+		## Check provided source files
+		check_source "$unpack_dir" "$active_dir" "$name" "$i" &&
+		
+		## Start batch and check if it executed correctly
+		run_batch "$unpack_dir" "$active_dir" "$name" "$i" &&
+
+		## Check the validity of output data
+		check_data "$unpack_dir" "$active_dir" "$name" "$i"
+
+		## $i is used together with names to make sure that group names have a unique biginning and ending in order confusion while `ls stuff-$name*`
+		i=$(($i + 1))
+	done
+
+	compute_results "$unpack_dir" "$active_dir"
+	info End of assessement
+}
+
+. ./platform
+active_dir=`pwd`
+
+assess|tee $full_logfile

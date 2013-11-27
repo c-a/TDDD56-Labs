@@ -1,0 +1,59 @@
+## md5-checked, do not modify
+SRC=$(wildcard *.c)
+FILES=array.* cons dec inc rand Makefile rand.c inc.c dec.c cons.c rand sort.* sort_main.c compile merge run settings start variables merge.m plot_data.m time_difference_global.m check.m Makefile.imposed disable.c disable.h assess groups platform plot_results.m points.m simple_quicksort.o.konrad_suze simple_quicksort.o.southfork simple_quicksort.o.ixtab simple_quicksort.c simple_quicksort.h
+ARCHIVE=Lab3.zip
+
+NB_THREADS=6
+VARIANT=1
+
+OUT=sort$(SUFFIX)
+MEASURE_FLAG=$(if $(MEASURE),-DMEASURE=$(MEASURE),)
+
+## Use suffix to end object files and final executable file's name in order to avoid several versions to erase each other
+SUFFIX=-$(VARIANT)-$(NB_THREADS)
+CFLAGS_IMPOSED=-g -O0 -Wall -pthread $(MEASURE_FLAG) -DVARIANT=$(VARIANT) -DNB_THREADS=$(NB_THREADS)
+LDFLAGS_IMPOSED=-lrt -pthread
+
+## You can refer to these variables in your makefile to use imposed CFLAGS and LDFLAGS
+CFLAGS_USABLE=$(CFLAGS_IMPOSED)
+LDFLAGS_USABLE=$(LDFLAGS_IMPOSED)
+
+all: rand.bin inc.bin dec.bin cons.bin $(OUT)
+
+clean:
+	$(RM) sort
+	$(RM) sort-*
+	$(RM) rand.bin
+	$(RM) dec.bin
+	$(RM) inc.bin
+	$(RM) cons.bin
+	$(RM) $(SRC:.c=.o)
+	
+$(OUT): sort_main.c sort$(SUFFIX).o disable$(MEASURE).o array$(MEASURE).o simple_quicksort.o
+	gcc $(CFLAGS) $(CFLAGS_IMPOSED) sort$(SUFFIX).o array$(MEASURE).o disable$(MEASURE).o simple_quicksort.o sort_main.c -o $(OUT) $(LDFLAGS_IMPOSED) $(LDFLAGS) 
+
+sort$(SUFFIX).o: sort.c
+	gcc $(CFLAGS) $(CFLAGS_IMPOSED) -c -o sort$(SUFFIX).o sort.c
+
+disable$(MEASURE).o: disable.c
+	gcc $(CFLAGS) $(CFLAGS_IMPOSED) -c -o disable$(MEASURE).o disable.c
+	
+array$(MEASURE).o: array.c
+	gcc $(CFLAGS) $(CFLAGS_IMPOSED) -c -o array$(MEASURE).o array.c
+
+rand.bin: rand.c array$(MEASURE).o disable$(MEASURE).o
+	gcc rand.c -o rand.bin array$(MEASURE).o disable$(MEASURE).o -pthread
+
+inc.bin: inc.c array$(MEASURE).o disable$(MEASURE).o
+	gcc inc.c -o inc.bin array$(MEASURE).o disable$(MEASURE).o -pthread
+
+dec.bin: dec.c array$(MEASURE).o disable$(MEASURE).o
+	gcc dec.c -o dec.bin array$(MEASURE).o disable$(MEASURE).o -pthread
+
+cons.bin: cons.c
+	gcc cons.c -o cons.bin
+
+dist: clean
+	zip $(ARCHIVE) $(FILES)
+
+.phony: all clean dist

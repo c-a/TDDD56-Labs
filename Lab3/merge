@@ -1,0 +1,62 @@
+#!/bin/bash -f
+
+#     Copyright 2011 Nicolas Melot
+# 
+#    Nicolas Melot (nicolas.melot@liu.se)
+# 
+# 
+#    This program is free software: you can redistribute it and/or modify
+#    it under the terms of the GNU General Public License as published by
+#    the Free Software Foundation, either version 3 of the License, or
+#    (at your option) any later version.
+# 
+#    This program is distributed in the hope that it will be useful,
+#    but WITHOUT ANY WARRANTY; without even the implied warranty of
+#    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#    GNU General Public License for more details.
+# 
+#    You should have received a copy of the GNU General Public License
+#    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+# $1-n are file holding the result of several experiments
+
+. ./settings
+
+args=("$@")
+output=`echo $@|tr ' ' '_'`.m
+
+SUFFIX=.tmp
+
+output="MERGED"
+for i in $@
+do
+	output=$output-`echo $i|rev|cut -f 1 -d '.' --complement|rev`
+done
+output=$output.m
+
+echo -e $HEADER > $output
+echo -n "% experiment " >> $output
+cat $1|head -2|tail -1|tr -d '%' >> $output
+
+#for i in `seq 1 $#`
+index=0
+for i in $@
+do
+	cp $i data.m
+	echo "merge($index, '$i$SUFFIX')" > oct_merge
+	octave oct_merge > /dev/null 2>&1
+	cat $i$SUFFIX >> $output
+	rm $i$SUFFIX
+	rm oct_merge
+	index=$(($index + 1))
+
+#	size=`cat $i|wc -l`
+#
+#	cat $i|head -$(($size - 1))|tail -$((size - 3))|while read line; do
+#		echo "$index $line" >> $output
+#	done	
+done
+
+echo -e $FOOTNOTE >> $output
+
+exit 0

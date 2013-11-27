@@ -1,0 +1,8 @@
+#!/bin/bash
+
+input_ref_dir=/doesnotexist
+ref_dir=/doesnotexist
+unpack_dir=/scratch/$USER
+
+logfile=assessement.log
+full_logfile=full_assessement.log

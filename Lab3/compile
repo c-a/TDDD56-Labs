@@ -1,0 +1,49 @@
+#!/bin/bash -f
+
+input_size=$1
+input_set=$2
+variant=$3
+nb_threads=$4
+
+if [ "x$input_dir" == "x" ]; then
+	input_dir=/scratch/$USER
+fi
+
+mkdir -p $input_dir
+
+case $input_set in
+0)
+	if [ "x`ls $input_dir/rand-$input_size 2>/dev/null`" == "x" ]
+	then
+		make rand.bin
+		bash rand 1 $input_size $input_size > $input_dir/rand-$input_size
+	fi
+	;;
+1)
+	if [ "x`ls $input_dir/inc-$input_size 2>/dev/null`" == "x" ]
+	then
+		make inc.bin
+		bash inc 1 $input_size $input_size > $input_dir/inc-$input_size
+	fi
+	;;
+2)
+	if [ "x`ls $input_dir/dec-$input_size 2>/dev/null`" == "x" ]
+	then
+		make dec.bin
+		bash dec 1 $input_size $input_size > $input_dir/dec-$input_size
+	fi
+	;;
+3)
+	if [ "x`ls $input_dir/cons-$input_size 2>/dev/null`" == "x" ]
+	then
+		bash cons $(($input_size / ($input_try + 1))) $input_size $input_size > $input_dir/cons-$input_size
+	fi
+	;;
+*)
+	echo [COMPILE][ERROR] Unknown input set: \"$input_set\"
+	;;
+esac
+
+make MEASURE=1 VARIANT=$variant NB_THREADS=$nb_threads SUFFIX=-$variant-$nb_threads
+
+exit $?

@@ -1,0 +1,14 @@
+#!/bin/bash -f
+
+run=(try)
+
+output="global_start_sec global_start_nsec global_stop_sec global_stop_nsec"
+
+try="`seq 1 5`"			# Number of different run per setting
+
+compile=(input_size input_set variants nb_threads)
+
+input_set="0 1 2 3"			# 0, 1, 2 and 3; respectively: random, ascending, descending, constant
+input_size="100000 10000000"		# number of integer
+variants="1"
+nb_threads=`seq 6 6`			# Change to seq 0 6 to run 7 variants, from sequential (0 threads) to 6 threads

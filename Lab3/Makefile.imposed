@@ -6,6 +6,8 @@ ARCHIVE=Lab3.zip
 NB_THREADS=6
 VARIANT=1
 
+QUICKSORT=quicksort
+
 OUT=sort$(SUFFIX)
 MEASURE_FLAG=$(if $(MEASURE),-DMEASURE=$(MEASURE),)
 
@@ -29,11 +31,14 @@ clean:
 	$(RM) cons.bin
 	$(RM) $(SRC:.c=.o)
 	
-$(OUT): sort_main.c sort$(SUFFIX).o disable$(MEASURE).o array$(MEASURE).o simple_quicksort.o
-	gcc $(CFLAGS) $(CFLAGS_IMPOSED) sort$(SUFFIX).o array$(MEASURE).o disable$(MEASURE).o simple_quicksort.o sort_main.c -o $(OUT) $(LDFLAGS_IMPOSED) $(LDFLAGS) 
+$(OUT): sort_main.c sort$(SUFFIX).o disable$(MEASURE).o array$(MEASURE).o $(QUICKSORT).o
+	gcc $(CFLAGS) $(CFLAGS_IMPOSED) sort$(SUFFIX).o array$(MEASURE).o disable$(MEASURE).o $(QUICKSORT).o sort_main.c -o $(OUT) $(LDFLAGS_IMPOSED) $(LDFLAGS) 
 
 sort$(SUFFIX).o: sort.c
 	gcc $(CFLAGS) $(CFLAGS_IMPOSED) -c -o sort$(SUFFIX).o sort.c
+
+quicksort.o: quicksort.c
+	gcc $(CFLAGS) $(CFLAGS_IMPOSED) -c -o quicksort.o quicksort.c
 
 disable$(MEASURE).o: disable.c
 	gcc $(CFLAGS) $(CFLAGS_IMPOSED) -c -o disable$(MEASURE).o disable.c

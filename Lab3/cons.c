@@ -31,7 +31,7 @@ main(int argc, char ** argv)
 
 	if(argc < 4)
 	{
-		printf("Usage: %s <min_value> <max_value> <number of values>\n");
+		printf("Usage: %s <min_value> <max_value> <number of values>\n", argv[0]);
 		return EXIT_FAILURE;
 	}
 	else

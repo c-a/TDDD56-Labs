@@ -33,7 +33,9 @@
 #include "array.h"
 #include "sort.h"
 #include "simple_quicksort.h"
+#include "quicksort.h"
 
+#if 0
 typedef enum
 {
   TASK_TYPE_SORT,
@@ -170,20 +172,20 @@ find_n_sorts(void)
   return best_n_sorts;
 }
 
-int
-sort(struct array * array)
+static int
+parallell_sort(struct array* array)
 {
   pthread_t thread[NB_THREADS];
-	pthread_attr_t thread_attr;
+  pthread_attr_t thread_attr;
   int i;
-	int n_sorts, n_tasks;
+  int n_sorts, n_tasks;
 
-	// Initialise thread poll / master thread synchronisation
-	pthread_barrier_init(&thread_pool_barrier, NULL, NB_THREADS + 1);
+  // Initialise thread poll / master thread synchronisation
+  pthread_barrier_init(&thread_pool_barrier, NULL, NB_THREADS + 1);
 
-	// Initialize attributes
-	pthread_attr_init(&thread_attr);
-	pthread_attr_setdetachstate(&thread_attr, PTHREAD_CREATE_JOINABLE);
+  // Initialize attributes
+  pthread_attr_init(&thread_attr);
+  pthread_attr_setdetachstate(&thread_attr, PTHREAD_CREATE_JOINABLE);
 
   // Find the number of splits that takes us closes to our wanted split size
   n_sorts = find_n_sorts();
@@ -223,17 +225,25 @@ sort(struct array * array)
   }
 
   // Start the worker threads
-	for (i = 0; i < NB_THREADS; i++)
-	{
-		pthread_create(&thread[i], &thread_attr, &thread_func, NULL);
-	}
+  for (i = 0; i < NB_THREADS; i++)
+  {
+    pthread_create(&thread[i], &thread_attr, &thread_func, NULL);
+  }
 
   // Wait for the threads to finish
-	for (i = 0; i < NB_THREADS; i++)
-	{
-		pthread_join(thread[i], NULL);
-	}
+  for (i = 0; i < NB_THREADS; i++)
+  {
+    pthread_join(thread[i], NULL);
+  }
 
-	return 0;
+  return 0;
 }
+#endif
 
+int
+sort(struct array * array)
+{
+  quicksort(array->data, 0, array->length - 1);
+
+  return 0;
+}

@@ -40,7 +40,7 @@ ascending(const void* a, const void* b)
 	int aa = *(value*) a;
 	int bb = *(value*) b;
 
-	return aa > bb;
+	return aa - bb;
 }
 
 int

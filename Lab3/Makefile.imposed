@@ -31,11 +31,17 @@ clean:
 	$(RM) cons.bin
 	$(RM) $(SRC:.c=.o)
 	
-$(OUT): sort_main.c sort$(SUFFIX).o disable$(MEASURE).o array$(MEASURE).o $(QUICKSORT).o
-	gcc $(CFLAGS) $(CFLAGS_IMPOSED) sort$(SUFFIX).o array$(MEASURE).o disable$(MEASURE).o $(QUICKSORT).o sort_main.c -o $(OUT) $(LDFLAGS_IMPOSED) $(LDFLAGS) 
+$(OUT): sort_main.c sort$(SUFFIX).o disable$(MEASURE).o array$(MEASURE).o $(QUICKSORT).o non_blocking.o task.o
+	gcc $(CFLAGS) $(CFLAGS_IMPOSED) sort$(SUFFIX).o array$(MEASURE).o disable$(MEASURE).o $(QUICKSORT).o non_blocking.o task.o sort_main.c -o $(OUT) $(LDFLAGS_IMPOSED) $(LDFLAGS) 
 
 sort$(SUFFIX).o: sort.c
 	gcc $(CFLAGS) $(CFLAGS_IMPOSED) -c -o sort$(SUFFIX).o sort.c
+
+task.o: task.c
+	gcc $(CFLAGS) $(CFLAGS_IMPOSED) -c -o task.o task.c
+
+non_blocking.o: task.c
+	gcc $(CFLAGS) $(CFLAGS_IMPOSED) -c -o non_blocking.o non_blocking.c
 
 quicksort.o: quicksort.c
 	gcc $(CFLAGS) $(CFLAGS_IMPOSED) -c -o quicksort.o quicksort.c

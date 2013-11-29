@@ -36,58 +36,6 @@
 #include "quicksort.h"
 
 #if 0
-typedef enum
-{
-  TASK_TYPE_SORT,
-  TASK_TYPE_MERGE
-} task_type_t;
-
-typedef struct
-{
-  task_type type;
-  int id;
-} task_t;
-
-typedef struct
-{
-  task_t task;
-
-  int* a;  
-} sort_task_t;
-
-static sort_task_t*
-sort_task_new(int id, int start, int end)
-{
-  sort_task_t* task;
-
-  task = malloc(sizeof(sort_task_t));
-  ((task_t*)task)->type = TASK_TYPE_SORT;
-  ((task_t*)task)->id = id;
-  
-  task->start = start;
-  task->end = end;
-}
-
-typedef struct
-{
-  task_t task;
-
-  int *in, *out;
-
-} merge_task_t;
-
-static merge_task_t*
-merge_task_new(int id, int* in, int *out)
-{
-  merge_task_t* task;
-
-  task = malloc(sizeof(merge_task_t));
-  ((task_t*)task)->type = TASK_TYPE_MERGE;
-  ((task_t*)task)->id = id;
-
-  task->in = in;
-  task->out = out;
-}
 
 typedef struct
 {

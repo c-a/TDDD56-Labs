@@ -1,3 +1,6 @@
+# Backup files
+*~
+
 # Object files
 *.o
 *.ko
@@ -16,3 +19,7 @@
 *.exe
 *.out
 *.app
+*.bin
+
+# Anjuta files
+.anjuta*

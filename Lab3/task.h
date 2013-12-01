@@ -18,24 +18,19 @@ typedef struct
   union {
     struct 
     {
-      int* data;
-      int* buf;
-      unsigned int start, end;
     } sort;
     struct 
     {
-      int* in;
-      int* out;
-      unsigned int start, mid, end;
+      unsigned int from;
+      unsigned int to;
     } merge;
   };
   
 } task_t;
 
-void sort_task_init(task_t* task, int id, int* data, int* buf,
-                    unsigned int start, unsigned int end);
-void merge_task_init(task_t* task, int id, int* in, int *out,
-                     unsigned int start, unsigned int mid, unsigned int end);
+void sort_task_init(task_t* task, int id);
+void merge_task_init(task_t* task, int id,
+                     unsigned int from, unsigned int to);
 
 typedef struct task_stack_node task_stack_node_t;
 

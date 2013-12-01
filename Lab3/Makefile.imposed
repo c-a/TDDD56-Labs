@@ -3,8 +3,9 @@ SRC=$(wildcard *.c)
 FILES=array.* cons dec inc rand Makefile rand.c inc.c dec.c cons.c rand sort.* sort_main.c compile merge run settings start variables merge.m plot_data.m time_difference_global.m check.m Makefile.imposed disable.c disable.h assess groups platform plot_results.m points.m simple_quicksort.o.konrad_suze simple_quicksort.o.southfork simple_quicksort.o.ixtab simple_quicksort.c simple_quicksort.h
 ARCHIVE=Lab3.zip
 
-NB_THREADS=6
+NB_THREADS=2
 VARIANT=1
+SEQUENTIAL_SORT_SIZE=2000000
 
 QUICKSORT=quicksort
 
@@ -13,7 +14,7 @@ MEASURE_FLAG=$(if $(MEASURE),-DMEASURE=$(MEASURE),)
 
 ## Use suffix to end object files and final executable file's name in order to avoid several versions to erase each other
 SUFFIX=-$(VARIANT)-$(NB_THREADS)
-CFLAGS_IMPOSED=-g -O0 -Wall -pthread $(MEASURE_FLAG) -DVARIANT=$(VARIANT) -DNB_THREADS=$(NB_THREADS)
+CFLAGS_IMPOSED=-g -O0 -Wall -pthread $(MEASURE_FLAG) -DVARIANT=$(VARIANT) -DNB_THREADS=$(NB_THREADS) -DSEQUENTIAL_SORT_SIZE=$(SEQUENTIAL_SORT_SIZE)
 LDFLAGS_IMPOSED=-lrt -pthread
 
 ## You can refer to these variables in your makefile to use imposed CFLAGS and LDFLAGS
@@ -31,11 +32,14 @@ clean:
 	$(RM) cons.bin
 	$(RM) $(SRC:.c=.o)
 	
-$(OUT): sort_main.c sort$(SUFFIX).o disable$(MEASURE).o array$(MEASURE).o $(QUICKSORT).o non_blocking.o task.o
-	gcc $(CFLAGS) $(CFLAGS_IMPOSED) sort$(SUFFIX).o array$(MEASURE).o disable$(MEASURE).o $(QUICKSORT).o non_blocking.o task.o sort_main.c -o $(OUT) $(LDFLAGS_IMPOSED) $(LDFLAGS) 
+$(OUT): sort_main.c sort$(SUFFIX).o disable$(MEASURE).o array$(MEASURE).o $(QUICKSORT).o parallel_mergesort$(SUFFIX).o task.o non_blocking.o
+	gcc $(CFLAGS) $(CFLAGS_IMPOSED) sort$(SUFFIX).o array$(MEASURE).o disable$(MEASURE).o parallel_mergesort$(SUFFIX).o $(QUICKSORT).o task.o non_blocking.o sort_main.c -o $(OUT) $(LDFLAGS_IMPOSED) $(LDFLAGS) 
 
 sort$(SUFFIX).o: sort.c
 	gcc $(CFLAGS) $(CFLAGS_IMPOSED) -c -o sort$(SUFFIX).o sort.c
+
+parallel_mergesort$(SUFFIX).o: parallel_mergesort.c
+	gcc $(CFLAGS) $(CFLAGS_IMPOSED) -c -o parallel_mergesort$(SUFFIX).o parallel_mergesort.c
 
 task.o: task.c
 	gcc $(CFLAGS) $(CFLAGS_IMPOSED) -c -o task.o task.c

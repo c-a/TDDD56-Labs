@@ -9,30 +9,21 @@
 #include "non_blocking.h"
 
 void
-sort_task_init(task_t* task, int id, int* data, int* buf,
-               unsigned int start, unsigned int end)
+sort_task_init(task_t* task, int id)
 {
   task->type = TASK_TYPE_SORT;
   task->id = id;
-
-  task->sort.data = data;
-  task->sort.buf = buf;
-  task->sort.start = start;
-  task->sort.end = end;
 }
 
 void
-merge_task_init(task_t* task, int id, int* in, int *out,
-                unsigned int start, unsigned int mid, unsigned int end)
+merge_task_init(task_t* task, int id,
+                unsigned int from, unsigned int to)
 {
   task->type = TASK_TYPE_MERGE;
   task->id = id;
 
-  task->merge.in = in;
-  task->merge.out = out;
-  task->merge.start = start;
-  task->merge.mid = mid;
-  task->merge.end = end;
+  task->merge.from = from;
+  task->merge.to = to;
 }
 
 struct task_stack_node

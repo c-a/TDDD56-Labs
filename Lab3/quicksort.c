@@ -18,11 +18,11 @@ insertion_sort(int* a, int first, int last) {
 
 static inline void
 swap(int* a, int* b) {
-	int c;
+  int c;
 
-	c = *a;
-	*a = *b;
-	*b = c;
+  c = *a;
+  *a = *b;
+  *b = c;
 }
 
 static inline int
@@ -71,24 +71,23 @@ two_way_partition(int *a, int first, int last) {
 
 void
 quicksort(int* a, int first, int last) {
-	int m, p;
+  int m, p;
 
-	/* Cutoff to insertion sort */
-	if (last - first <= 7) {
-		insertion_sort(a, first, last);
-		return;
-	}
+  /* Cutoff to insertion sort */
+  if (last - first <= 7) {
+    insertion_sort(a, first, last);
+    return;
+  }
 
-	/* Take the median of three as the pivot element */
-	m = median_of_three(a, first, last);
-	/* Put median next first */
-	swap(&a[m], &a[first+1]);
+  /* Take the median of three as the pivot element */
+  m = median_of_three(a, first, last);
+  /* Put median next first */
+  swap(&a[m], &a[first+1]);
 
-	/* Partition, returns position of pivot */
-	p = two_way_partition(a, first, last);
+  /* Partition, returns position of pivot */
+  p = two_way_partition(a, first, last);
 
-	/* Sort a[first..p-1] and a[p+1..last] */
-	quicksort(a, first, p-1);
-	quicksort(a, p+1, last);
+  /* Sort a[first..p-1] and a[p+1..last] */
+  quicksort(a, first, p-1);
+  quicksort(a, p+1, last);
 }
-

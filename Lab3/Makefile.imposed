@@ -5,7 +5,6 @@ ARCHIVE=Lab3.zip
 
 NB_THREADS=2
 VARIANT=1
-SEQUENTIAL_SORT_SIZE=2000000
 
 QUICKSORT=quicksort
 
@@ -14,7 +13,7 @@ MEASURE_FLAG=$(if $(MEASURE),-DMEASURE=$(MEASURE),)
 
 ## Use suffix to end object files and final executable file's name in order to avoid several versions to erase each other
 SUFFIX=-$(VARIANT)-$(NB_THREADS)
-CFLAGS_IMPOSED=-g -O0 -Wall -pthread $(MEASURE_FLAG) -DVARIANT=$(VARIANT) -DNB_THREADS=$(NB_THREADS) -DSEQUENTIAL_SORT_SIZE=$(SEQUENTIAL_SORT_SIZE)
+CFLAGS_IMPOSED=-g -O0 -Wall -pthread $(MEASURE_FLAG) -DVARIANT=$(VARIANT) -DNB_THREADS=$(NB_THREADS)
 LDFLAGS_IMPOSED=-lrt -pthread
 
 ## You can refer to these variables in your makefile to use imposed CFLAGS and LDFLAGS

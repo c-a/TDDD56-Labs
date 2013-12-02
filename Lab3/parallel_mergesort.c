@@ -7,6 +7,8 @@
 #include "array.h"
 #include "quicksort.h"
 
+#define SEQUENTIAL_SORT_SIZE 2000000
+
 #define MIN(x, y) ((x) < (y) ? (x) : (y))
 #define MAX(x, y) ((x) > (y) ? (x) : (y))
 

@@ -1,5 +1,7 @@
 % 1-input_size 2-input_set 3-variant 4-nb_threads 5-try 6-global_start_sec 7-global_start_nsec 8-global_stop_sec 9-global_stop_nsec
 
+addpath("octave")
+
 globalperf = select(data, [1 2 3 4 6 7 8 9]); % 
 globalperf = duplicate(globalperf, [1 1 1 1 1 1 1 2]); % 
 globalperf = apply(globalperf, 9, @time_difference_global); % 

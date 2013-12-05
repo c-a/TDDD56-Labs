@@ -28,6 +28,7 @@
 #include <math.h>
 #include <limits.h>
 #include <assert.h>
+#include <string.h>
 #include "disable.h"
 
 #ifndef DEBUG
@@ -104,15 +105,17 @@ thread_func(void* user_data)
   /* Copy data from per thread partitions into array */
   to = from - 1;
   for (i = 0; i < NB_THREADS; i++) {
-    int length, j;
+    int length;
     int* a;
 
     a = thread_data[i].partitions[td->id].data;
     length = thread_data[i].partitions[td->id].length;
 
-    for (j = 0; j < length; j++)
-      data[++to] = a[j];
+    memcpy(data + to + 1, a, length*sizeof(int));
+    to += length;
   }
+
+  printf("Thread %d, size: %d\n", td->id, to - from + 1);
 
   /* Sort our part of the array */
   quicksort(data, from, to);
@@ -127,6 +130,7 @@ parallel_samplesort(struct array* array)
   int n_samples, data_step_size, sample_step_size;
   int* samples;
   int partition_size;
+  int same;
 
   pthread_attr_t thread_attr;
   pthread_t thread[NB_THREADS];
@@ -145,11 +149,25 @@ parallel_samplesort(struct array* array)
     samples[i] = array->data[i*data_step_size];
 
   quicksort(samples, 0, n_samples - 1);
-  sample_step_size = n_samples / (NB_THREADS - 1);
-  for (i = 0; i < NB_THREADS - 1; i++)
-    pivots[i] = samples[sample_step_size / 2 + i*sample_step_size];
-  pivots[NB_THREADS - 1] = INT_MAX;
 
+  /* Check if all samples are the same. */
+  same = 1;
+  for (i = 1; i < n_samples; i++)
+    if (samples[i] != samples[i-1]) {
+      same = 0;
+      break;
+    }
+
+  /* Just do sequential quicksort if all samples are the same. */
+  if (same) {
+    quicksort(array->data, 0, array->length - 1);
+    return 0;
+  }
+
+  sample_step_size = n_samples / NB_THREADS;
+  for (i = 0; i < NB_THREADS - 1; i++)
+    pivots[i] = samples[(i+1)*sample_step_size];
+  pivots[NB_THREADS - 1] = INT_MAX;
 
   /* Initialise thread synchronisation */
   pthread_barrier_init(&thread_barrier, NULL, NB_THREADS);

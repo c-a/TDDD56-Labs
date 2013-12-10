@@ -2,15 +2,15 @@
 
 static inline void
 insertion_sort(int* a, int first, int last) {
-	int i;
+  int i;
 
   for (i = first + 1; i <= last; ++i) {
-  	int v, j;
+    int v, j;
 
-  	v = a[i];
-  	j = i;
+    v = a[i];
+    j = i;
     for (j = i; j > first && a[j-1] > v; --j) {
-    	a[j] = a[j-1];
+      a[j] = a[j-1];
     }
     a[j] = v;
   }

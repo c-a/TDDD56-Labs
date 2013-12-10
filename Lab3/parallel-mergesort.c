@@ -3,7 +3,7 @@
 #include <pthread.h>
 #include <unistd.h>
 
-#include "task.h"
+#include "mergesort-task.h"
 #include "array.h"
 #include "quicksort.h"
 
@@ -210,7 +210,7 @@ find_n_sorts(int length)
 }
 
 int
-parallell_mergesort(struct array* array)
+parallel_mergesort(struct array* array)
 {
   pthread_t thread[NB_THREADS];
   pthread_attr_t thread_attr;

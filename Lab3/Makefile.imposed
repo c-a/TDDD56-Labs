@@ -4,7 +4,7 @@ FILES=array.* cons dec inc rand Makefile rand.c inc.c dec.c cons.c rand sort.* s
 ARCHIVE=Lab3.zip
 
 NB_THREADS=2
-VARIANT=1
+VARIANT=2
 
 QUICKSORT=quicksort
 
@@ -31,23 +31,39 @@ clean:
 	$(RM) cons.bin
 	$(RM) $(SRC:.c=.o)
 	
-$(OUT): sort_main.c sort$(SUFFIX).o disable$(MEASURE).o array$(MEASURE).o $(QUICKSORT).o parallel_mergesort$(SUFFIX).o task.o non_blocking.o
-	gcc $(CFLAGS) $(CFLAGS_IMPOSED) sort$(SUFFIX).o array$(MEASURE).o disable$(MEASURE).o parallel_mergesort$(SUFFIX).o $(QUICKSORT).o task.o non_blocking.o sort_main.c -o $(OUT) $(LDFLAGS_IMPOSED) $(LDFLAGS) 
+
+OBJECTS = sort$(SUFFIX).o disable$(MEASURE).o array$(MEASURE).o $(QUICKSORT).o
+ifeq ($(VARIANT), 2)
+	OBJECTS += parallel_quicksort$(SUFFIX).o quicksort_task$(SUFFIX).o
+endif
+ifeq ($(VARIANT), 3)
+	OBJECTS += parallel_mergesort$(SUFFIX).o mergesort_task.o
+endif
+
+$(OUT): sort_main.c $(OBJECTS)
+	gcc $(CFLAGS) $(CFLAGS_IMPOSED) $(OBJECTS) sort_main.c -o $(OUT) $(LDFLAGS_IMPOSED) $(LDFLAGS) 
 
 sort$(SUFFIX).o: sort.c
 	gcc $(CFLAGS) $(CFLAGS_IMPOSED) -c -o sort$(SUFFIX).o sort.c
 
-parallel_mergesort$(SUFFIX).o: parallel_mergesort.c
-	gcc $(CFLAGS) $(CFLAGS_IMPOSED) -c -o parallel_mergesort$(SUFFIX).o parallel_mergesort.c
+ifeq ($(VARIANT), 2)
+parallel_quicksort$(SUFFIX).o: parallel-quicksort.c
+	gcc $(CFLAGS) $(CFLAGS_IMPOSED) -c -o $@ $<
 
-task.o: task.c
-	gcc $(CFLAGS) $(CFLAGS_IMPOSED) -c -o task.o task.c
+quicksort_task$(SUFFIX).o: quicksort-task.c quicksort-task.h
+	gcc $(CFLAGS) $(CFLAGS_IMPOSED) -c -o $@ $<
+endif
 
-non_blocking.o: task.c
-	gcc $(CFLAGS) $(CFLAGS_IMPOSED) -c -o non_blocking.o non_blocking.c
+ifeq ($(VARIANT), 3)
+parallel_mergesort$(SUFFIX).o: parallel-mergesort.c
+	gcc $(CFLAGS) $(CFLAGS_IMPOSED) -c -o $@ $<
+
+mergesort_task.o: mergesort-task.c
+	gcc $(CFLAGS) $(CFLAGS_IMPOSED) -c -o $@ $<
+endif
 
 quicksort.o: quicksort.c
-	gcc $(CFLAGS) $(CFLAGS_IMPOSED) -c -o quicksort.o quicksort.c
+	gcc $(CFLAGS) $(CFLAGS_IMPOSED) -c -o $@ $<
 
 disable$(MEASURE).o: disable.c
 	gcc $(CFLAGS) $(CFLAGS_IMPOSED) -c -o disable$(MEASURE).o disable.c

@@ -5,8 +5,13 @@
 #include <stdio.h>
 #include <errno.h>
 
-#include "task.h"
-#include "non_blocking.h"
+#include "mergesort-task.h"
+
+static inline size_t
+cas(size_t* reg, size_t oldval, size_t newval)
+{
+  return __sync_val_compare_and_swap(reg, oldval, newval);
+}
 
 void
 sort_task_init(task_t* task, int id)

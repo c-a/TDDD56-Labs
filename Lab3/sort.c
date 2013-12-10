@@ -41,8 +41,9 @@
 #include "quicksort.h"
 
 #if VARIANT == 2
-int parallell_mergesort(struct array* array);
-
+int parallel_quicksort(struct array* array);
+#elif VARIANT == 3
+int parallel_mergesort(struct array* array);
 #elif VARIANT == 1
 #if NB_THREADS > 1
 
@@ -234,7 +235,9 @@ sort(struct array * array)
   quicksort(array->data, 0, array->length - 1);
 #elif VARIANT == 1
   parallel_samplesort(array);
-#else
+#elif VARIANT == 2
+  parallel_quicksort(array);
+#elif VARIANT == 3
   parallell_mergesort(array);
 #endif
 

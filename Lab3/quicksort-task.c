@@ -181,7 +181,7 @@ task_stack_pop(task_stack_t* stack, task_t** task)
     // finished doing parallel partitioning yet.
     t = (task_t*)popped;
     if (t->type == TASK_TYPE_PARTITION &&
-        t->partition.state < PARTITION_STATE_FINISHED)
+        t->partition.state < PARTITION_STATE_PARALLEL_FINISHED)
       break;
 
     new_head = popped->prev;

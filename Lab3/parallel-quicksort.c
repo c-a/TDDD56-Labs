@@ -12,6 +12,7 @@
 #define SEQUENTIAL_SORT_SIZE 20000
 
 int* array;
+unsigned volatile int task_counter;
 static task_stack_t task_stack;
 
 static inline void
@@ -65,7 +66,7 @@ neutralize(block_t* left_block, block_t* right_block,
       break;
 
     swap(&array[al], &array[bl]);
-  } while (true );
+  } while (true);
 
   left_block->start = al;
   right_block->start = bl;
@@ -77,7 +78,7 @@ neutralize(block_t* left_block, block_t* right_block,
   return RIGHT;
 }
 
-#if 0
+#if 1
 static void
 check_partitions(task_t* task, unsigned int split) {
   unsigned int i;
@@ -106,6 +107,7 @@ sequential_partition(task_t* task) {
   int* blocks = task->partition.remaining_blocks;
   quicksort(blocks, 0, NB_THREADS - 1);
 
+  // Try to neutralize the remaining blocks
   left = 0;
   while (left < NB_THREADS && blocks[left] < 0) left++;
   right = NB_THREADS - 1;
@@ -137,6 +139,7 @@ sequential_partition(task_t* task) {
   else if (task->partition.right_neutralized == task->partition.blocks)
     return task->partition.start;
 
+  // Swap non-neutralized blocks into position.
   left = task->partition.left_neutralized;
   right = task->partition.blocks - task->partition.right_neutralized - 1;
   for (i = 0; i < NB_THREADS; i++) {
@@ -157,6 +160,7 @@ sequential_partition(task_t* task) {
       swap(a, b);
   }
 
+  // Sequentially partition the remaining non neutralized area
   left_block = partition_task_get_block(task, task->partition.left_neutralized);
   right_block = partition_task_get_block(task, task->partition.blocks - task->partition.right_neutralized - 1);
   start  = left_block.start;
@@ -228,6 +232,7 @@ partition_task(task_t* task, int tid)
     int m = median_of_three(array, task->partition.start, task->partition.end);
     task->partition.pivot = array[m];
     *state = PARTITION_STATE_PIVOT_CHOSEN;
+  __sync_synchronize();
   }
   else {
     // Increase the number of busy threads for this task.
@@ -251,9 +256,12 @@ partition_task(task_t* task, int tid)
 
   unsigned int split = sequential_partition(task);
 
-#if 0
+#if 1
   check_partitions(task, split);
 #endif
+
+  // We create two new tasks and finish one >= +1 tasks
+  __sync_fetch_and_add(&task_counter, 1);
 
   task_t* new_task = task_stack_reserve(&task_stack);
   if (task->partition.end - split <= SEQUENTIAL_SORT_SIZE)
@@ -275,8 +283,11 @@ partition_task(task_t* task, int tid)
 static void
 sort_task(task_t* task)
 {
-  /* Sort */
+  // Sort
   quicksort(array, task->sort.start, task->sort.end);
+
+  // Finished one task
+  __sync_fetch_and_add(&task_counter, -1);
 }
 
 static void*
@@ -284,13 +295,15 @@ thread_func(void* data)
 {
   int tid = (int)(long)data;
 
-  while (true)
+  while (task_counter > 0)
   {
     task_t *task;
 
     /* Pull task */
-    if (task_stack_pop(&task_stack, &task) != 0)
-      break;
+    if (task_stack_pop(&task_stack, &task) != 0) {
+      usleep(50);
+      continue;
+    }
 
     switch (task->type) {
       case TASK_TYPE_PARTITION:
@@ -301,7 +314,7 @@ thread_func(void* data)
         break;
 
       default:
-        assert(0); /* Should not be reached */
+        assert(0); // Should not be reached
     }
   }
 
@@ -344,6 +357,7 @@ parallel_quicksort(struct array* in_array)
 
   /* Push inital partition task. */
   array = in_array->data;
+  task_counter = 1;
   task = task_stack_reserve(&task_stack);
   partition_task_init(task, 0, in_array->length - 1);
   task_stack_push(&task_stack, task);

@@ -49,24 +49,24 @@ median_of_three(int* a, int first, int last) {
  */
 static inline int
 two_way_partition(int *a, int first, int last) {
-  int l, r, pivot;
+  int *l, *r, pivot;
 
-  l = first+1; r = last;
+  l = a+first+1; r = a+last;
   pivot = a[first+1];
   while (true) {
-    while (a[++l] < pivot);
-    while (a[--r] > pivot);
+    while (*(++l) < pivot);
+    while (*(--r) > pivot);
 
     if (l >= r)
       break;
 
-    swap(&a[l], &a[r]);
+    swap(l, r);
   }
 
   /* Put pivot into place */
-  swap(&a[first+1], &a[r]);
+  swap(&a[first+1], r);
 
-  return r;
+  return (int)(r - a);
 }
 
 void

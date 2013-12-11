@@ -51,25 +51,25 @@ static side_t
 neutralize(block_t* left_block, block_t* right_block,
            int pivot)
 {
-  unsigned int al, ar, bl, br;
+  int *al, *ar, *bl, *br;
 
-  al = left_block->start;
-  ar = left_block->end;
-  bl = right_block->start;
-  br = right_block->end;
+  al = array + left_block->start;
+  ar = array + left_block->end;
+  bl = array + right_block->start;
+  br = array + right_block->end;
 
   do {
-    while (al <= ar && array[al] <= pivot) al++;
-    while (bl <= br && array[bl] >= pivot) bl++;
+    while (al <= ar && *al <= pivot) al++;
+    while (bl <= br && *bl >= pivot) bl++;
 
     if (al > ar || bl > br)
       break;
 
-    swap(&array[al], &array[bl]);
+    swap(al, bl);
   } while (true);
 
-  left_block->start = al;
-  right_block->start = bl;
+  left_block->start = (al - array);
+  right_block->start = (bl - array);
 
   if (al > ar && bl > br)
     return BOTH;
@@ -119,18 +119,18 @@ sequential_partition(task_t* task) {
 
     side = neutralize(&left_block, &right_block, task->partition.pivot);
     if (side == LEFT || side == BOTH) {
-      if (left < task->partition.left_neutralized) {
+      if (blocks[left] < task->partition.left_neutralized) {
         task->partition.left_neutralized++;
         blocks[left] = -1;
       }
-      left_block = partition_task_get_block(task, ++left);
+      left_block = partition_task_get_block(task, blocks[++left]);
     }
     if (side == RIGHT || side == BOTH) {
-      if (right >= (task->partition.blocks - task->partition.right_neutralized)) {
+      if (blocks[right] >= (task->partition.blocks - task->partition.right_neutralized)) {
         task->partition.right_neutralized++;
         blocks[right] = -1;
       }
-      right_block = partition_task_get_block(task, --right);
+      right_block = partition_task_get_block(task, blocks[--right]);
     }
   }
 
@@ -165,20 +165,20 @@ sequential_partition(task_t* task) {
   right_block = partition_task_get_block(task, task->partition.blocks - task->partition.right_neutralized - 1);
   start  = left_block.start;
   end = right_block.end;
-  left = start - 1;
-  right = end + 1;
+  int *s = array + start, *e = array + end;
+  int *l = array + start - 1, *r = array + end + 1;
   int pivot = task->partition.pivot;
   while (true) {
-    while (array[++left] < pivot) if (left == end) break;
-    while (array[--right] > pivot) if (right == start) break;
+    while (*(++l) < pivot) if (l == e) break;
+    while (*(--r) > pivot) if (r == s) break;
 
-    if (left >= right)
+    if (l >= r)
       break;
 
-    swap(&array[left], &array[right]);
+    swap(l, r);
   }
 
-  return right;
+  return (r - array);
 }
 
 static void
@@ -229,8 +229,17 @@ partition_task(task_t* task, int tid)
   owner = __sync_val_compare_and_swap(state, PARTITION_STATE_INITIAL, PARTITION_STATE_OWNED) == PARTITION_STATE_INITIAL;
   if (owner) {
     // Choose pivot
+#if 1
+    int samples[20], i;
+    int data_step_size = (task->partition.end - task->partition.start + 1) / 20;
+    for (i = 0; i < 20; i++)
+      samples[i] = array[task->partition.start + i*data_step_size];
+    quicksort(samples, 0, 20 - 1);
+    task->partition.pivot = samples[10];
+#else
     int m = median_of_three(array, task->partition.start, task->partition.end);
     task->partition.pivot = array[m];
+#endif
     *state = PARTITION_STATE_PIVOT_CHOSEN;
   __sync_synchronize();
   }
@@ -251,6 +260,7 @@ partition_task(task_t* task, int tid)
   }
 
   // Wait for all other threads to finish
+  __sync_synchronize();
   while (task->partition.busy_threads != 0);
   __sync_synchronize();
 

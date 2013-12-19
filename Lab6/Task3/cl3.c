@@ -18,6 +18,8 @@
 #include "CLutilities.h"
 #include "readppm.h"
 
+#define MAX(x,y) ((x) > (y) ? x : y)
+
 // Size of data!
 int dataWidth, dataHeight;
 
@@ -36,10 +38,50 @@ struct timeval t_s_cpu, t_e_cpu,t_s_gpu, t_e_gpu;
 void cpu_WL(unsigned char *image, unsigned char *data, unsigned int length)
 {
   unsigned int i;
-  
-  for (i = 0; i < length; i++) // For all elements
+  for (i = 0; i < dataHeight / 2; i++)
   {
-    data[i] = 255 - image[i];
+    unsigned int j;
+    for (j = 0; j < dataWidth / 2; j++) {
+      int i1r, i1g, i1b, i2r, i2g, i2b, i3r, i3g, i3b, i4r, i4g, i4b;
+
+      unsigned int i_2 = 2*i, j_2 = 2*j;
+
+      i1r = image[(i_2*dataWidth+j_2)*3+0];
+      i1g = image[(i_2*dataWidth+j_2)*3+1];
+      i1b = image[(i_2*dataWidth+j_2)*3+2];
+
+      i2r = image[(i_2*dataWidth+(j_2+1))*3+0];
+      i2g = image[(i_2*dataWidth+(j_2+1))*3+1];
+      i2b = image[(i_2*dataWidth+(j_2+1))*3+2];
+
+      i3r = image[((i_2+1)*dataWidth+j_2)*3+0];
+      i3g = image[((i_2+1)*dataWidth+j_2)*3+1];
+      i3b = image[((i_2+1)*dataWidth+j_2)*3+2];
+
+      i4r = image[((i_2+1)*dataWidth+(j_2+1))*3+0];
+      i4g = image[((i_2+1)*dataWidth+(j_2+1))*3+1];
+      i4b = image[((i_2+1)*dataWidth+(j_2+1))*3+2];
+
+      /* Out 1 */
+      data[(i*dataWidth + j)*3+0] = (i1r+i2r+i3r+i4r) / 4;
+      data[(i*dataWidth + j)*3+1] = (i1g+i2g+i3g+i4g) / 4;
+      data[(i*dataWidth + j)*3+2] = (i1b+i2b+i3b+i4b) / 4;
+
+      /* Out 2 */
+      data[(i*dataWidth + dataWidth/2 + j)*3+0] = (i1r+i2r-i3r-i4r) / 4 + 128;
+      data[(i*dataWidth + dataWidth/2 + j)*3+1] = (i1g+i2g-i3g-i4g) / 4 + 128;
+      data[(i*dataWidth + dataWidth/2 + j)*3+2] = (i1b+i2b-i3b-i4b) / 4 + 128;
+
+      /* Out 3 */
+      data[((dataHeight/2+i)*dataWidth + j)*3+0] = (i1r-i2r+i3r-i4r) / 4 + 128;
+      data[((dataHeight/2+i)*dataWidth + j)*3+1] = (i1g-i2g+i3g-i4g) / 4 + 128;
+      data[((dataHeight/2+i)*dataWidth + j)*3+2] = (i1b-i2b+i3b-i4b) / 4 + 128;
+
+      /* Out 4 */
+      data[((dataHeight/2+i)*dataWidth + dataWidth/2 + j)*3+0] = (i1r-i2r-i3r+i4r) / 4 + 128;
+      data[((dataHeight/2+i)*dataWidth + dataWidth/2 + j)*3+1] = (i1g-i2g-i3g+i4g) / 4 + 128;
+      data[((dataHeight/2+i)*dataWidth + dataWidth/2 + j)*3+2] = (i1b-i2b-i3b+i4b) / 4 + 128;
+    }
   }
 }
 
@@ -103,7 +145,7 @@ int init_OpenCL()
 int gpu_WL(unsigned char *image, unsigned char *data, unsigned int length)
 {
   cl_int ciErrNum = CL_SUCCESS;
-  size_t localWorkSize, globalWorkSize;
+  size_t localWorkSize[2], globalWorkSize[2];
   cl_mem in_data, out_data;
   printf("GPU processing.\n");
   
@@ -112,20 +154,21 @@ int gpu_WL(unsigned char *image, unsigned char *data, unsigned int length)
   out_data = clCreateBuffer(cxGPUContext, CL_MEM_WRITE_ONLY, length * sizeof(unsigned char), NULL, &ciErrNum);
     printCLError(ciErrNum,7);
 
-    if (length<512) localWorkSize  = length;
-    else            localWorkSize  = 512;
-    globalWorkSize = length;
+    localWorkSize[0]  = 256;
+    localWorkSize[1]  = 1;
+    globalWorkSize[0] = (dataWidth / 2);
+    globalWorkSize[1] = (dataHeight / 2);
 
     // set the args values
     ciErrNum  = clSetKernelArg(myKernel, 0, sizeof(cl_mem),  (void *) &in_data);
     ciErrNum |= clSetKernelArg(myKernel, 1, sizeof(cl_mem),  (void *) &out_data);
-    ciErrNum |= clSetKernelArg(myKernel, 2, sizeof(cl_uint), (void *) &length);
+    ciErrNum |= clSetKernelArg(myKernel, 2, sizeof(cl_uint), (void *) &dataHeight);
     printCLError(ciErrNum,8);
 
     gettimeofday(&t_s_gpu, NULL);
     
     cl_event event;
-    ciErrNum = clEnqueueNDRangeKernel(commandQueue, myKernel, 1, NULL, &globalWorkSize, &localWorkSize, 0, NULL, &event);
+    ciErrNum = clEnqueueNDRangeKernel(commandQueue, myKernel, 2, NULL, globalWorkSize, localWorkSize, 0, NULL, &event);
     printCLError(ciErrNum,9);
     
     clWaitForEvents(1, &event); // Synch
@@ -272,3 +315,4 @@ int main( int argc, char** argv)
 	
 	glutMainLoop();
 }
+
